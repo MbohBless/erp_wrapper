@@ -1,0 +1,30 @@
+# Public reverse proxy for the Medical Equipment ERP.
+#
+# Served over plain HTTP on :80 for local/single-VPS V1. To enable automatic
+# HTTPS, replace the `:80` site address with your real domain (e.g.
+# `erp.example.com`) and Caddy will provision a certificate automatically.
+
+{
+	# No admin API surface needed inside the container.
+	admin off
+}
+
+# ---- Main app: frontend + backend ----
+:80 {
+	# /api/* -> FastAPI. handle_path strips the /api prefix, so a request to
+	# /api/health reaches the backend as /health (FastAPI uses root_path=/api
+	# so its OpenAPI docs at /api/docs stay correct).
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else -> Next.js.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+
+# ---- ERPNext admin UI (add `127.0.0.1 erp.localhost` to /etc/hosts) ----
+http://erp.localhost {
+	reverse_proxy erpnext-nginx:8080
+}

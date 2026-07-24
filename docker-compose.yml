@@ -1,0 +1,263 @@
+# Medical Equipment ERP — Docker Compose environment (V1)
+#
+# Architecture:  Users -> Caddy -> Next.js (frontend) -> FastAPI (backend) -> ERPNext -> MariaDB
+#                Redis (cache + queue) backs ERPNext / Frappe.
+#
+# This file provisions INFRASTRUCTURE ONLY. No business logic is implemented.
+# Copy .env.example to .env before running:  cp .env.example .env
+#
+# Note: `erpnext-nginx` below is ERPNext's OWN internal web server, shipped
+# inside the official frappe/erpnext image. The public-facing reverse proxy
+# is Caddy (the `caddy` service).
+
+name: equimed
+
+# ----------------------------------------------------------------------------
+# Shared anchors for the ERPNext / Frappe services (all use the same image).
+# ----------------------------------------------------------------------------
+x-erpnext-image: &erpnext_image
+  image: frappe/erpnext:${ERPNEXT_VERSION:-v15}
+  restart: unless-stopped
+
+x-erpnext-volumes: &erpnext_volumes
+  - sites:/home/frappe/frappe-bench/sites
+  - logs:/home/frappe/frappe-bench/logs
+
+x-erpnext-depends: &erpnext_depends
+  erpnext-configurator:
+    condition: service_completed_successfully
+
+services:
+  # ==========================================================================
+  # Data stores
+  # ==========================================================================
+  db:
+    image: mariadb:10.6
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--password=${DB_ROOT_PASSWORD:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  redis-cache:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-cache-data:/data
+
+  redis-queue:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-queue-data:/data
+
+  # ==========================================================================
+  # ERPNext / Frappe
+  # ==========================================================================
+
+  # One-shot: writes db + redis coordinates into common_site_config.json.
+  erpnext-configurator:
+    <<: *erpnext_image
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+    volumes: *erpnext_volumes
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+  # One-shot: creates the site and installs the erpnext app (idempotent).
+  erpnext-create-site:
+    <<: *erpnext_image
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        wait-for-it -t 120 db:3306;
+        wait-for-it -t 120 redis-cache:6379;
+        wait-for-it -t 120 redis-queue:6379;
+        export start=`date +%s`;
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        do
+          echo "Waiting for sites/common_site_config.json to be created";
+          sleep 5;
+          if (( `date +%s`-start > 120 )); then
+            echo "common_site_config.json missing required keys"; exit 1;
+          fi
+        done;
+        echo "Config ready.";
+        if [ -d "sites/${SITE_NAME:-equimed.local}" ]; then
+          echo "Site ${SITE_NAME:-equimed.local} already exists, skipping creation.";
+          exit 0;
+        fi;
+        echo "Creating site ${SITE_NAME:-equimed.local} ...";
+        bench new-site \
+          --mariadb-user-host-login-scope='%' \
+          --admin-password="${ADMIN_PASSWORD:-admin}" \
+          --db-root-username=root \
+          --db-root-password="${DB_ROOT_PASSWORD:-admin}" \
+          --install-app erpnext \
+          --set-default "${SITE_NAME:-equimed.local}" \
+          "${SITE_NAME:-equimed.local}";
+    volumes: *erpnext_volumes
+    depends_on:
+      erpnext-configurator:
+        condition: service_completed_successfully
+
+  # Gunicorn web workers (image default command).
+  erpnext-backend:
+    <<: *erpnext_image
+    volumes: *erpnext_volumes
+    depends_on: *erpnext_depends
+
+  # Realtime websocket server.
+  erpnext-websocket:
+    <<: *erpnext_image
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    volumes: *erpnext_volumes
+    depends_on: *erpnext_depends
+
+  # Background job scheduler.
+  erpnext-scheduler:
+    <<: *erpnext_image
+    command: ["bench", "schedule"]
+    volumes: *erpnext_volumes
+    depends_on: *erpnext_depends
+
+  # Short-running background workers.
+  erpnext-queue-short:
+    <<: *erpnext_image
+    command: ["bench", "worker", "--queue", "short,default"]
+    volumes: *erpnext_volumes
+    depends_on: *erpnext_depends
+
+  # Long-running background workers.
+  erpnext-queue-long:
+    <<: *erpnext_image
+    command: ["bench", "worker", "--queue", "long,default,short"]
+    volumes: *erpnext_volumes
+    depends_on: *erpnext_depends
+
+  # ERPNext's own nginx (serves assets + proxies to gunicorn/websocket).
+  erpnext-nginx:
+    <<: *erpnext_image
+    environment:
+      BACKEND: erpnext-backend:8000
+      SOCKETIO: erpnext-websocket:9000
+      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-equimed.local}
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: "120"
+      CLIENT_MAX_BODY_SIZE: 50m
+    volumes: *erpnext_volumes
+    ports:
+      - "${ERPNEXT_PORT:-8080}:8080"
+    depends_on:
+      erpnext-backend:
+        condition: service_started
+      erpnext-websocket:
+        condition: service_started
+
+  # ==========================================================================
+  # Application layer (skeletons only — no business logic)
+  # ==========================================================================
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: "Medical ERP API"
+      ROOT_PATH: /api
+      DATABASE_URL: sqlite:////app/data/app.db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-admin@equimed.cm}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-admin12345}
+      FIRST_ADMIN_NAME: ${FIRST_ADMIN_NAME:-Administrator}
+      ERPNEXT_URL: http://erpnext-nginx:8080
+      ERPNEXT_API_KEY: ${ERPNEXT_API_KEY:-}
+      ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET:-}
+      CORS_ORIGINS: '["*"]'
+    volumes:
+      - backend-data:/app/data
+    expose:
+      - "8000"
+    depends_on:
+      erpnext-nginx:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # Browser calls the API through the reverse proxy at /api.
+      NEXT_PUBLIC_API_BASE_URL: /api
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_started
+
+  # ==========================================================================
+  # Public reverse proxy — Caddy (single entry point on port 80)
+  #   localhost/        -> Next.js frontend
+  #   localhost/api/*   -> FastAPI backend (prefix stripped)
+  #   erp.localhost/    -> ERPNext (also reachable directly on :${ERPNEXT_PORT})
+  # ==========================================================================
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - frontend
+      - backend
+      - erpnext-nginx
+
+volumes:
+  sites:
+  logs:
+  db-data:
+  redis-cache-data:
+  redis-queue-data:
+  caddy-data:
+  caddy-config:
+  backend-data:

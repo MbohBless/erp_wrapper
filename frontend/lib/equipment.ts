@@ -1,0 +1,47 @@
+import { api, encodeId } from "@/lib/http";
+
+export type EquipmentStatus =
+  | "In Store"
+  | "Installed"
+  | "Under Repair"
+  | "Decommissioned";
+
+export type Equipment = {
+  id: string;
+  serial_no: string;
+  item_code: string;
+  item_name: string | null;
+  customer: string | null;
+  installation_date: string | null;
+  warranty_expiry_date: string | null;
+  status: EquipmentStatus;
+};
+
+export type EquipmentInput = {
+  serial_no: string;
+  item_code: string;
+  customer?: string | null;
+  installation_date?: string | null;
+  warranty_expiry_date?: string | null;
+  status?: EquipmentStatus;
+};
+
+export const listEquipment = (
+  token: string,
+  params: { search?: string; status?: string } = {}
+) => api.get<Equipment[]>(token, "/equipment", { ...params, limit: 200 });
+
+export const createEquipment = (token: string, input: EquipmentInput) =>
+  api.post<Equipment>(token, "/equipment", input);
+
+export const updateEquipment = (token: string, id: string, input: EquipmentInput) =>
+  api.put<Equipment>(token, `/equipment/${encodeId(id)}`, input);
+
+export const deleteEquipment = (token: string, id: string) =>
+  api.del(token, `/equipment/${encodeId(id)}`);
+
+export const installEquipment = (
+  token: string,
+  id: string,
+  body: { customer?: string | null; installation_date?: string | null } = {}
+) => api.post<Equipment>(token, `/equipment/${encodeId(id)}/install`, body);

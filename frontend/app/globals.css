@@ -1,0 +1,188 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* EquiMed design-system tokens (imported from the Claude Design project). */
+:root {
+  --color-bg: #f2f2f3;
+  --color-surface: #e9e9ea;
+  --color-text: #1d1f20;
+  --color-accent: #5980a6;
+  --color-accent-600: #597ea3;
+  --color-accent-700: #416180;
+  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+
+  --ok: #15803d;
+  --warn: #b45309;
+  --err: #b91c1c;
+  --ok-raw: #16a34a;
+  --warn-raw: #f59e0b;
+  --err-raw: #dc2626;
+
+  --font-heading: "Barlow Condensed", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, sans-serif;
+
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #12171d;
+  --color-surface: #1a2129;
+  --color-text: #eef2f6;
+  --color-accent: #8fb4d8;
+  --color-accent-600: #a4c3e0;
+  --color-accent-700: #b8d1e8;
+  --color-divider: color-mix(in srgb, #ffffff 12%, transparent);
+
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --ok-raw: #22c55e;
+  --warn-raw: #f59e0b;
+  --err-raw: #ef4444;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+@layer base {
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer components {
+  /* Blueprint frame: hairline box with corner registration ticks. */
+  .blueprint {
+    position: relative;
+    border: 1px solid var(--color-divider);
+    border-radius: 12px;
+    background: transparent;
+  }
+  .corner {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+  .corner::before,
+  .corner::after {
+    content: "";
+    position: absolute;
+    background: currentColor;
+  }
+  .corner::before {
+    left: 5px;
+    top: 0;
+    width: 1px;
+    height: 100%;
+  }
+  .corner::after {
+    top: 5px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+  }
+  .corner-tl {
+    top: -6px;
+    left: -6px;
+  }
+  .corner-tr {
+    top: -6px;
+    right: -6px;
+  }
+  .corner-bl {
+    bottom: -6px;
+    left: -6px;
+  }
+  .corner-br {
+    bottom: -6px;
+    right: -6px;
+  }
+
+  /* Token-driven helpers that Tailwind arbitrary values can't express
+     (color-mix over the theme ink). */
+  .muted {
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+  .muted-2 {
+    color: color-mix(in srgb, var(--color-text) 48%, transparent);
+  }
+  .muted-3 {
+    color: color-mix(in srgb, var(--color-text) 42%, transparent);
+  }
+  .divide-soft {
+    border-color: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .navitem {
+    color: color-mix(in srgb, var(--color-text) 72%, transparent);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .navitem:hover {
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
+    color: var(--color-text);
+  }
+  .navitem[data-active="true"] {
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+    color: var(--color-text);
+  }
+  .icobtn {
+    border-radius: 8px;
+    transition: background 0.15s ease;
+  }
+  .icobtn:hover {
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+  .eq-field {
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider);
+    border-radius: 8px;
+    color: var(--color-text);
+  }
+  .eq-field:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 0;
+    border-color: var(--color-accent);
+  }
+  .eq-scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+  .eq-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-text) 18%, transparent);
+    border-radius: 6px;
+  }
+}
+
+@keyframes eqRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.eq-view {
+  animation: eqRise 0.22s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .eq-view {
+    animation: none;
+  }
+}
