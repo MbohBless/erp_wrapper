@@ -14,6 +14,7 @@ class PurchaseInvoiceCreate(BaseModel):
     items: list[BillLineInput] = Field(min_length=1)
     bill_no: str | None = None
     posting_date: str | None = None
+    remarks: str | None = None
 
 
 class BillLine(BaseModel):
@@ -32,4 +33,5 @@ class PurchaseInvoiceRead(BaseModel):
     grand_total: float
     outstanding_amount: float
     status: str
+    remarks: str | None = None
     items: list[BillLine] = []

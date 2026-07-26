@@ -18,6 +18,7 @@ import {
   getDashboard,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 const PERIOD = new Intl.DateTimeFormat("en-GB", {
   month: "long",
@@ -46,6 +47,7 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const { token, logout } = useAuth();
+  const { t } = useI18n();
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => getDashboard(token as string),
@@ -60,7 +62,7 @@ function DashboardContent() {
   if (error)
     return (
       <div className="blueprint p-10 text-center muted">
-        Could not load the dashboard. Please retry.
+        {t("dashboard.loadError")}
       </div>
     );
   if (!data) return null;
@@ -68,6 +70,7 @@ function DashboardContent() {
 }
 
 function DashboardView({ data }: { data: DashboardSummary }) {
+  const { t } = useI18n();
   const revenueDelta = useMemo<Delta | undefined>(() => {
     const t = data.revenue_trend;
     if (t.length < 2) return undefined;
@@ -89,21 +92,21 @@ function DashboardView({ data }: { data: DashboardSummary }) {
       <nav className="flex items-center gap-2 text-xs muted mb-3">
         <span>EquiMed</span>
         <span>›</span>
-        <span className="text-ink">Dashboard</span>
+        <span className="text-ink">{t("dashboard.title")}</span>
       </nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-6">
         <div>
-          <h1 className="text-[32px] mb-1">Dashboard</h1>
-          <p className="muted text-sm m-0">Company-wide performance · {PERIOD}</p>
+          <h1 className="text-[32px] mb-1">{t("dashboard.title")}</h1>
+          <p className="muted text-sm m-0">{t("dashboard.subtitle")} · {PERIOD}</p>
         </div>
         <div className="flex gap-2.5">
-          <button className="h-10 px-4 inline-flex items-center gap-2 rounded-lg border border-divider text-sm font-heading font-semibold hover:bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)]">
+          <button className="btn btn-outlined">
             <Icon name="export" size={15} />
-            Export
+            {t("dashboard.export")}
           </button>
-          <button className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600">
+          <button className="btn btn-filled">
             <Icon name="plus" size={15} sw={1.8} />
-            New record
+            {t("dashboard.newRecord")}
           </button>
         </div>
       </div>
@@ -112,29 +115,29 @@ function DashboardView({ data }: { data: DashboardSummary }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
         <KpiCard
           icon="revenue"
-          label="Revenue"
+          label={t("dashboard.kpi.revenue")}
           value={compact(data.revenue_today)}
-          sub="Today"
+          sub={t("dashboard.kpi.today")}
           delta={revenueDelta}
           spark={spark}
         />
         <KpiCard
           icon="box3d"
-          label="Inventory Value"
+          label={t("dashboard.kpi.inventoryValue")}
           value={compact(data.inventory_value)}
-          sub="On-hand stock"
+          sub={t("dashboard.kpi.onHand")}
         />
         <KpiCard
           icon="receivable"
-          label="Receivables"
+          label={t("dashboard.kpi.receivables")}
           value={compact(data.outstanding_customers)}
-          sub="Outstanding customers"
+          sub={t("dashboard.kpi.outstandingCustomers")}
         />
         <KpiCard
           icon="payable"
-          label="Payables"
+          label={t("dashboard.kpi.payables")}
           value={compact(data.outstanding_suppliers)}
-          sub="Outstanding suppliers"
+          sub={t("dashboard.kpi.outstandingSuppliers")}
         />
       </div>
 
@@ -147,16 +150,16 @@ function DashboardView({ data }: { data: DashboardSummary }) {
       {/* Low stock + expiring */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <ListPanel
-          title={`Low stock${data.low_stock_count ? ` · ${data.low_stock_count}` : ""}`}
+          title={`${t("dashboard.lowStock")}${data.low_stock_count ? ` · ${data.low_stock_count}` : ""}`}
           dotColor="var(--warn)"
           rows={LOW_STOCK}
-          action="View all"
+          action={t("dashboard.viewAll")}
         />
         <ListPanel
-          title="Expiring soon"
+          title={t("dashboard.expiringSoon")}
           dotColor="var(--err)"
           rows={EXPIRING}
-          action="View all"
+          action={t("dashboard.viewAll")}
         />
       </div>
 

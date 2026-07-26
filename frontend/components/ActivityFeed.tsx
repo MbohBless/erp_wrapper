@@ -2,6 +2,7 @@ import Blueprint from "@/components/Blueprint";
 import { Icon } from "@/components/icons";
 import type { ActivityItem } from "@/lib/api";
 import { shortDate, xafCompact } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 const ICON_FOR: Record<string, string> = {
   "Sales Invoice": "revenue",
@@ -10,14 +11,15 @@ const ICON_FOR: Record<string, string> = {
 };
 
 export default function ActivityFeed({ items }: { items: ActivityItem[] }) {
+  const { t } = useI18n();
   return (
     <Blueprint className="p-0 overflow-hidden">
       <div className="px-5 py-4 border-b border-divider">
-        <span className="font-heading font-semibold text-base">Activity</span>
+        <span className="font-heading font-semibold text-base">{t("dashboard.activity")}</span>
       </div>
       <div className="py-1.5">
         {items.length === 0 ? (
-          <div className="py-12 text-center muted-2 text-sm">Nothing recent.</div>
+          <div className="py-12 text-center muted-2 text-sm">{t("dashboard.nothingRecent")}</div>
         ) : (
           items.slice(0, 6).map((it) => (
             <div key={`${it.type}-${it.reference}`} className="flex gap-3 px-5 py-2.5">

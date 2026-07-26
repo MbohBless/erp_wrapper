@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import MaintenanceDialog from "@/components/maintenance/MaintenanceDialog";
 import MaintenanceDrawer from "@/components/maintenance/MaintenanceDrawer";
 import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
@@ -15,14 +15,12 @@ import TableSkeleton from "@/components/ui/TableSkeleton";
 import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, shortDate } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   type Ticket,
-  type TicketInput,
   completeTicket,
-  createTicket,
   deleteTicket,
   listTickets,
-  updateTicket,
 } from "@/lib/maintenance";
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -43,14 +41,14 @@ export default function MaintenancePage() {
 
 
 type Dialog =
-  | { kind: "create" }
-  | { kind: "edit"; t: Ticket }
   | { kind: "view"; t: Ticket }
   | { kind: "delete"; t: Ticket }
   | null;
 
 function MaintenanceContent() {
   const { token, logout } = useAuth();
+  const { t } = useI18n();
+  const router = useRouter();
   const qc = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -76,17 +74,6 @@ function MaintenanceContent() {
   const rows = useMemo(() => data ?? [], [data]);
   const invalidate = () => qc.invalidateQueries({ queryKey: ["maintenance"] });
 
-  const createMut = useMutation({
-    mutationFn: (input: TicketInput) => createTicket(token as string, input),
-    onSuccess: () => { invalidate(); setDialog(null); },
-    onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
-  });
-  const updateMut = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: TicketInput }) =>
-      updateTicket(token as string, id, input),
-    onSuccess: () => { invalidate(); setDialog(null); },
-    onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
-  });
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteTicket(token as string, id),
     onSuccess: () => { invalidate(); setDialog(null); },
@@ -103,20 +90,20 @@ function MaintenanceContent() {
       <nav className="flex items-center gap-2 text-xs muted mb-3">
         <span>EquiMed</span>
         <span>›</span>
-        <span className="text-ink">Maintenance</span>
+        <span className="text-ink">{t("maintenance.title")}</span>
       </nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-5">
         <div>
-          <h1 className="text-[32px] mb-1">Maintenance</h1>
-          <p className="muted text-sm m-0">Service tickets and field visits</p>
+          <h1 className="text-[32px] mb-1">{t("maintenance.title")}</h1>
+          <p className="muted text-sm m-0">{t("maintenance.subtitle")}</p>
         </div>
         <button
           type="button"
-          onClick={() => { setFormError(null); setDialog({ kind: "create" }); }}
-          className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          onClick={() => router.push("/maintenance/new")}
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          New ticket
+          {t("maintenance.newTicket")}
         </button>
       </div>
 
@@ -127,7 +114,7 @@ function MaintenanceContent() {
           </span>
           <input
             className="eq-field w-full h-[38px] pl-8 pr-3 text-sm"
-            placeholder="Filter by customer…"
+            placeholder={t("maintenance.searchPlaceholder")}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -137,12 +124,12 @@ function MaintenanceContent() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="">All statuses</option>
-          <option value="Open">Open</option>
-          <option value="Scheduled">Scheduled</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
+          <option value="">{t("maintenance.allStatuses")}</option>
+          <option value="Open">{t("maintenance.status.open")}</option>
+          <option value="Scheduled">{t("maintenance.status.scheduled")}</option>
+          <option value="In Progress">{t("maintenance.status.inProgress")}</option>
+          <option value="Completed">{t("maintenance.status.completed")}</option>
+          <option value="Cancelled">{t("maintenance.status.cancelled")}</option>
         </select>
       </div>
 
@@ -151,7 +138,7 @@ function MaintenanceContent() {
           <table className="w-full text-sm border-collapse min-w-[900px]">
             <thead>
               <tr className="muted">
-                {["Ticket", "Equipment", "Customer", "Engineer", "Visit", "Status", ""].map(
+                {[t("maintenance.col.ticket"), t("maintenance.col.equipment"), t("maintenance.col.customer"), t("maintenance.col.engineer"), t("maintenance.col.visit"), t("common.status"), ""].map(
                   (h, i) => (
                     <th key={i} className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${i === 0 ? "text-left pl-5" : "text-left"}`}>
                       {h}
@@ -164,9 +151,9 @@ function MaintenanceContent() {
               {isLoading ? (
                 <TableSkeleton cols={7} />
               ) : error ? (
-                <tr><td colSpan={7} className="py-10 text-center muted">Could not load tickets.</td></tr>
+                <tr><td colSpan={7} className="py-10 text-center muted">{t("maintenance.loadError")}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center muted-2">No tickets match your filters.</td></tr>
+                <tr><td colSpan={7} className="py-12 text-center muted-2">{t("maintenance.empty")}</td></tr>
               ) : (
                 rows.map((t) => (
                   <tr key={t.id} className="group border-b border-solid divide-soft hover:bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)]">
@@ -181,7 +168,7 @@ function MaintenanceContent() {
                     <td className="py-3 pr-4">
                       <RowActions
                         onView={() => setDialog({ kind: "view", t })}
-                        onEdit={() => { setFormError(null); setDialog({ kind: "edit", t }); }}
+                        onEdit={() => router.push(`/maintenance/${encodeURIComponent(t.id)}/edit`)}
                         onDelete={() => { setFormError(null); setDialog({ kind: "delete", t }); }}
                       />
                     </td>
@@ -193,34 +180,20 @@ function MaintenanceContent() {
         </div>
       </Blueprint>
 
-      {(dialog?.kind === "create" || dialog?.kind === "edit") && (
-        <MaintenanceDialog
-          initial={dialog.kind === "edit" ? dialog.t : null}
-          busy={createMut.isPending || updateMut.isPending}
-          error={formError}
-          onCancel={() => setDialog(null)}
-          onSubmit={(input) => {
-            setFormError(null);
-            dialog.kind === "edit"
-              ? updateMut.mutate({ id: dialog.t.id, input })
-              : createMut.mutate(input);
-          }}
-        />
-      )}
       {dialog?.kind === "view" && (
         <MaintenanceDrawer
           ticket={dialog.t}
           completing={completeMut.isPending}
           onClose={() => setDialog(null)}
-          onEdit={() => { setFormError(null); setDialog({ kind: "edit", t: dialog.t }); }}
+          onEdit={() => router.push(`/maintenance/${encodeURIComponent(dialog.t.id)}/edit`)}
           onComplete={() => completeMut.mutate(dialog.t.id)}
         />
       )}
       {dialog?.kind === "delete" && (
         <ConfirmDialog
-          title="Delete ticket"
-          message={`Delete ticket “${dialog.t.id}”? This cannot be undone.`}
-          confirmLabel="Delete"
+          title={t("maintenance.deleteTitle")}
+          message={`${t("maintenance.deletePrompt")} “${dialog.t.id}” ? ${t("common.deleteConfirm")}`}
+          confirmLabel={t("action.delete")}
           busy={deleteMut.isPending}
           error={formError}
           onCancel={() => setDialog(null)}

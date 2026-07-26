@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 
 import { Icon } from "@/components/icons";
+import { useI18n } from "@/lib/i18n";
 
 // Nav keys that map to real routes (others are placeholders for now).
 const ROUTES: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function Sidebar({
   onLogout: () => void;
 }) {
   const pathname = usePathname();
+  const { t } = useI18n();
   const width = collapsed ? "w-20" : "w-[280px]";
   const initials = (user ?? "AM").slice(0, 2).toUpperCase();
 
@@ -83,7 +85,7 @@ export default function Sidebar({
               EquiMed
             </div>
             <div className="text-[10px] tracking-[0.14em] uppercase muted mt-0.5">
-              Distribution Suite
+              {t("brand.tagline")}
             </div>
           </div>
         )}
@@ -95,7 +97,7 @@ export default function Sidebar({
           <div key={group.label}>
             {!collapsed && (
               <div className="text-[10px] tracking-[0.12em] uppercase muted-3 px-3.5 pt-3 pb-1.5">
-                {group.label}
+                {t(`nav.group.${group.label.toLowerCase()}`)}
               </div>
             )}
             {group.items.map((item) => {
@@ -118,7 +120,7 @@ export default function Sidebar({
                   >
                     <Icon name={item.key} />
                   </span>
-                  {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && <span>{t(`nav.${item.key}`)}</span>}
                 </a>
               );
             })}
@@ -135,16 +137,16 @@ export default function Sidebar({
           <>
             <div className="flex-1 min-w-0 leading-tight">
               <div className="text-[13px] font-semibold truncate">
-                {user ?? "EquiMed user"}
+                {user ?? t("user.fallback")}
               </div>
               <div className="text-[11px] muted truncate">
-                Operations · EquiMed SA
+                {t("user.subtitle")}
               </div>
             </div>
             <button
               type="button"
               onClick={onLogout}
-              title="Log out"
+              title={t("action.logout")}
               className="icobtn grid place-items-center w-8 h-8 shrink-0 muted"
             >
               <Icon name="logout" size={17} />

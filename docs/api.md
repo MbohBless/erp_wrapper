@@ -181,6 +181,9 @@ installation_date, warranty_expiry_date, status }`.
 | GET | `/finance/summary` | receivables, payables, net position, overdue, outstanding lists (from invoices) |
 | GET | `/finance/reports/income-statement` | ERPNext P&L; query `company` (req), `fiscal_year`, `from_date`, `to_date`, `periodicity` |
 | GET | `/finance/reports/balance-sheet` | ERPNext Balance Sheet; same query params |
+| GET | `/finance/reports/ohada/compte-de-resultat` | **OHADA Système Normal** — Compte de résultat par nature with the SIG cascade (marge commerciale → VA → EBE → résultat d'exploitation/financier → RAO → HAO → résultat net). Built from the SYSCOHADA Trial Balance. Query `company` (req), `fiscal_year`, `from_date`, `to_date` |
+| GET | `/finance/reports/ohada/bilan` | **OHADA Système Normal** — Bilan (Actif/Passif, list presentation) with reference codes. Same query params |
+| GET | `/finance/reports/ohada/flux-de-tresorerie` | **OHADA Système Normal** — Tableau des Flux de Trésorerie (direct method): treasury GL movements classified by counter-account class (2→investing, 1→financing, else operating). Same query params |
 
 ---
 
@@ -189,6 +192,24 @@ installation_date, warranty_expiry_date, status }`.
 `GET /api/dashboard` → `{ revenue_today, outstanding_customers,
 outstanding_suppliers, inventory_value, low_stock_count, revenue_trend[],
 recent_activity[] }` (aggregated from ERPNext invoices, payments and bins).
+
+## Reports  `/api/reports`  — *Manager, Accountant*
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/reports/{report_key}/pdf` | Branded, **cryptographically signed (PAdES)** PDF. `report_key` ∈ `receivables`, `payables`, `current-stock`, `low-stock`, `income-statement`, `balance-sheet`, **`compte-de-resultat`**, **`bilan`**, **`flux-de-tresorerie`** (the last three are the OHADA statutory statements). Query (per report): `company` (req. for statements), `fiscal_year`, `from_date`, `to_date`, `warehouse`. Returns `application/pdf` (attachment). |
+
+Rendering: reportlab letterhead (logo, legal details, signatory block) → signed with
+pyHanko using a self-signed certificate auto-provisioned in `/app/data/signing`
+(persistent `backend-data` volume). Data is pulled from the finance/inventory
+services; branding comes from the company profile below.
+
+## Settings  `/api/settings`
+
+| Method | Path | Access | Notes |
+| --- | --- | --- | --- |
+| GET | `/settings/company-profile` | any authenticated | Singleton branding profile (letterhead + signatory + accent + logo data-URI). |
+| PUT | `/settings/company-profile` | Manager, Accountant | Full replacement of the editable branding fields. Stored in the app DB, not ERPNext. |
 
 ## Health  — *public*
 

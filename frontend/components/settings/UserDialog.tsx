@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
+import Modal from "@/components/ui/Modal";
 import { type Role, ROLES, type User } from "@/lib/users";
 
-const FIELD = "eq-field w-full px-3 py-2 text-sm";
-const LABEL = "block text-xs muted mb-1.5";
+const FIELD = "eq-field w-full px-4 py-3 text-[15px]";
+const LABEL = "block text-[13px] muted mb-2";
 
 export type UserFormValue = {
   email: string;
@@ -39,8 +40,8 @@ export default function UserDialog({
   const set = (k: keyof UserFormValue, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 bg-[color-mix(in_srgb,#000_50%,transparent)]" onClick={onCancel}>
-      <form className="blueprint w-full max-w-[460px] p-6 bg-bg" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
+    <Modal onClose={onCancel} className="max-w-[460px]">
+      <form className="p-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
         <h3 className="font-heading font-semibold text-xl mb-4">{editing ? "Edit user" : "New user"}</h3>
         {error && <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2 rounded-lg text-[13px] mb-4">{error}</div>}
         <div className="grid grid-cols-1 gap-3.5">
@@ -70,12 +71,12 @@ export default function UserDialog({
           )}
         </div>
         <div className="flex justify-end gap-2.5 mt-6">
-          <button type="button" onClick={onCancel} className="h-10 px-4 rounded-lg border border-divider text-sm font-heading font-semibold hover:bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)]">Cancel</button>
-          <button type="submit" disabled={busy} className="h-10 px-4 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600 disabled:opacity-50">
+          <button type="button" onClick={onCancel} className="btn btn-text">Cancel</button>
+          <button type="submit" disabled={busy} className="btn btn-filled">
             {busy ? "Saving…" : editing ? "Save" : "Create user"}
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

@@ -79,3 +79,21 @@ class FakeERPNextClient:
         # Record the call so tests can assert report name + filters.
         self.last_report = {"report_name": report_name, "filters": filters or {}}
         return {"report_name": report_name, "filters": filters or {}, "result": []}
+
+    async def call_method(self, method, args=None, http_method="POST"):
+        args = args or {}
+        if method.endswith("get_payment_entry"):
+            return {
+                "doctype": "Payment Entry",
+                "payment_type": "Receive" if args.get("dt") == "Sales Invoice" else "Pay",
+                "party_type": "Customer" if args.get("dt") == "Sales Invoice" else "Supplier",
+                "party": "Test Party",
+                "paid_amount": 1000,
+                "received_amount": 1000,
+                "posting_date": "2026-07-25",
+                "references": [
+                    {"reference_doctype": args.get("dt"), "reference_name": args.get("dn"),
+                     "allocated_amount": 1000}
+                ],
+            }
+        return None

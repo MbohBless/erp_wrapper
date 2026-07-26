@@ -42,6 +42,7 @@ def _from_erpnext(doc: dict) -> PurchaseInvoiceRead:
         grand_total=grand,
         outstanding_amount=outstanding,
         status=status,
+        remarks=doc.get("remarks") or None,
         items=items,
     )
 
@@ -92,6 +93,7 @@ class PurchaseRepository:
             items=items,
             bill_no=data.bill_no,
             posting_date=data.posting_date,
+            remarks=data.remarks,
             submit=True,
         )
         return _from_erpnext(doc)

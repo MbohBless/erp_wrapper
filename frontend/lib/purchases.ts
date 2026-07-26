@@ -16,6 +16,7 @@ export type PurchaseInvoice = {
   grand_total: number;
   outstanding_amount: number;
   status: string;
+  remarks: string | null;
   items: BillLine[];
 };
 
@@ -24,6 +25,7 @@ export type PurchaseInput = {
   items: { item_code: string; qty: number; rate: number }[];
   bill_no?: string | null;
   posting_date?: string | null;
+  remarks?: string | null;
 };
 
 export const listPurchases = (

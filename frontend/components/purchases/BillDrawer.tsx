@@ -3,20 +3,36 @@
 import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import type { PurchaseInvoice } from "@/lib/purchases";
 
 export default function BillDrawer({
   bill,
   onClose,
+  onRecordPayment,
 }: {
   bill: PurchaseInvoice;
   onClose: () => void;
+  onRecordPayment?: () => void;
 }) {
+  const { t } = useI18n();
+  const footer =
+    onRecordPayment && bill.outstanding_amount > 0 ? (
+      <button type="button" onClick={onRecordPayment} className="btn btn-filled">
+        {t("purchases.recordPayment")}
+      </button>
+    ) : undefined;
   return (
-    <Drawer eyebrow="Purchase invoice" title={bill.id} onClose={onClose} width="max-w-[460px]">
+    <Drawer
+      eyebrow={t("purchases.drawer.eyebrow")}
+      title={bill.id}
+      onClose={onClose}
+      width="max-w-[460px]"
+      footer={footer}
+    >
       <div className="flex justify-between mb-5">
         <div>
-          <div className="text-xs muted mb-1">Supplier</div>
+          <div className="text-xs muted mb-1">{t("purchases.col.supplier")}</div>
           <div className="font-medium">{bill.supplier}</div>
         </div>
         <StatusTag label={bill.status} tone={invoiceTone(bill.status)} dot={false} />
@@ -24,28 +40,28 @@ export default function BillDrawer({
 
       <div className="grid grid-cols-2 gap-3 mb-6 text-sm">
         <div>
-          <div className="text-xs muted mb-1">Posting date</div>
+          <div className="text-xs muted mb-1">{t("purchases.postingDate")}</div>
           <div>{bill.posting_date ?? "—"}</div>
         </div>
         <div>
-          <div className="text-xs muted mb-1">Supplier bill no.</div>
+          <div className="text-xs muted mb-1">{t("purchases.supplierBillNo")}</div>
           <div>{bill.bill_no ?? "—"}</div>
         </div>
       </div>
 
-      <div className="text-[11px] tracking-[0.08em] uppercase muted mb-2">Line items</div>
+      <div className="text-[11px] tracking-[0.08em] uppercase muted mb-2">{t("purchases.lineItems")}</div>
       <div className="blueprint p-0 overflow-hidden mb-5">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="muted">
               <th className="text-left text-[11px] uppercase font-semibold px-3 py-2 border-b border-divider">
-                Item
+                {t("purchases.col.item")}
               </th>
               <th className="text-right text-[11px] uppercase font-semibold px-3 py-2 border-b border-divider">
-                Qty
+                {t("purchases.col.qty")}
               </th>
               <th className="text-right text-[11px] uppercase font-semibold px-3 py-2 border-b border-divider">
-                Amount
+                {t("purchases.col.amount")}
               </th>
             </tr>
           </thead>
@@ -53,7 +69,7 @@ export default function BillDrawer({
             {bill.items.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-3 py-4 text-center muted-2">
-                  No line items.
+                  {t("purchases.noLineItems")}
                 </td>
               </tr>
             ) : (
@@ -70,13 +86,20 @@ export default function BillDrawer({
       </div>
 
       <div className="flex justify-between py-1.5 text-sm">
-        <span className="muted">Grand total</span>
+        <span className="muted">{t("purchases.grandTotal")}</span>
         <span className="font-semibold">{xaf(bill.grand_total)}</span>
       </div>
       <div className="flex justify-between py-1.5 text-sm">
-        <span className="muted">Outstanding</span>
+        <span className="muted">{t("purchases.outstanding")}</span>
         <span className="font-semibold">{xaf(bill.outstanding_amount)}</span>
       </div>
+
+      {bill.remarks && (
+        <div className="mt-5">
+          <div className="text-[11px] tracking-[0.08em] uppercase muted mb-1.5">{t("purchases.remarks")}</div>
+          <div className="text-sm">{bill.remarks}</div>
+        </div>
+      )}
     </Drawer>
   );
 }

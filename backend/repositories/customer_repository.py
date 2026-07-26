@@ -20,7 +20,10 @@ _FIELD_MAP: dict[str, str] = {
     "email": "custom_email",
     "address": "custom_address",
 }
-_READ_FIELDS = ["name", *_FIELD_MAP.values(), "outstanding_amount"]
+# NOTE: outstanding balance is a receivables lookup, not a column on the
+# Customer master, so it is not requested here (Customer.outstanding_amount
+# does not exist). `outstanding_balance` is therefore left as None on reads.
+_READ_FIELDS = ["name", *_FIELD_MAP.values()]
 
 
 def _to_erpnext(data: dict) -> dict:

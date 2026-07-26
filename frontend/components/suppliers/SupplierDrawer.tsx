@@ -1,6 +1,7 @@
 "use client";
 
 import Drawer, { DetailRow } from "@/components/ui/Drawer";
+import { useI18n } from "@/lib/i18n";
 import type { Supplier } from "@/lib/suppliers";
 
 export default function SupplierDrawer({
@@ -12,6 +13,7 @@ export default function SupplierDrawer({
   onClose: () => void;
   onEdit: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Drawer
       eyebrow={supplier.supplier_type}
@@ -21,23 +23,23 @@ export default function SupplierDrawer({
         <button
           type="button"
           onClick={onEdit}
-          className="h-10 px-4 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          className="btn btn-filled"
         >
-          Edit supplier
+          {t("suppliers.drawer.edit")}
         </button>
       }
     >
-      <DetailRow label="Group" value={supplier.supplier_group} />
-      <DetailRow label="Contact person" value={supplier.contact_person ?? ""} />
-      <DetailRow label="Phone" value={supplier.phone ?? ""} />
-      <DetailRow label="Email" value={supplier.email ?? ""} />
+      <DetailRow label={t("suppliers.detail.group")} value={supplier.supplier_group} />
+      <DetailRow label={t("suppliers.detail.contactPerson")} value={supplier.contact_person ?? ""} />
+      <DetailRow label={t("suppliers.detail.phone")} value={supplier.phone ?? ""} />
+      <DetailRow label={t("suppliers.detail.email")} value={supplier.email ?? ""} />
       <DetailRow
-        label="Lead time"
-        value={supplier.lead_time_days != null ? `${supplier.lead_time_days} days` : ""}
+        label={t("suppliers.detail.leadTime")}
+        value={supplier.lead_time_days != null ? `${supplier.lead_time_days} ${t("suppliers.days")}` : ""}
       />
-      <DetailRow label="Tax ID" value={supplier.tax_id ?? ""} />
-      <DetailRow label="Address" value={supplier.address ?? ""} />
-      <DetailRow label="Status" value={supplier.disabled ? "Disabled" : "Active"} />
+      <DetailRow label={t("suppliers.detail.taxId")} value={supplier.tax_id ?? ""} />
+      <DetailRow label={t("suppliers.detail.address")} value={supplier.address ?? ""} />
+      <DetailRow label={t("common.status")} value={supplier.disabled ? t("common.disabled") : t("common.active")} />
     </Drawer>
   );
 }

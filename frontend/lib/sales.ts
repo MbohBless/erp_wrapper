@@ -15,13 +15,18 @@ export type SalesInvoice = {
   grand_total: number;
   outstanding_amount: number;
   status: string;
+  remarks: string | null;
   items: InvoiceLine[];
 };
 
 export type SalesInvoiceInput = {
   customer: string;
-  items: { item_code: string; qty: number; rate: number }[];
+  items: { item_code: string; qty: number; rate: number; description?: string | null }[];
+  posting_date?: string | null;
   due_date?: string | null;
+  remarks?: string | null;
+  update_stock?: boolean;
+  taxes_and_charges?: string | null;
 };
 
 export const listSales = (

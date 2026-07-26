@@ -40,6 +40,7 @@ def _from_erpnext(doc: dict) -> SalesInvoiceRead:
         grand_total=grand,
         outstanding_amount=outstanding,
         status=status,
+        remarks=doc.get("remarks") or None,
         items=items,
     )
 
@@ -80,16 +81,21 @@ class SalesRepository:
         return _from_erpnext(doc)
 
     async def create(self, data: SalesInvoiceCreate) -> SalesInvoiceRead:
-        items = [
-            {"item_code": line.item_code, "qty": line.qty, "rate": line.rate}
-            for line in data.items
-        ]
+        items = []
+        for line in data.items:
+            row: dict = {"item_code": line.item_code, "qty": line.qty, "rate": line.rate}
+            if line.description:
+                row["description"] = line.description
+            items.append(row)
         doc = await create_invoice(
             self.client,
             customer=data.customer,
             items=items,
             due_date=data.due_date,
             posting_date=data.posting_date,
+            remarks=data.remarks,
+            update_stock=data.update_stock,
+            taxes_and_charges=data.taxes_and_charges,
             submit=True,
         )
         return _from_erpnext(doc)

@@ -33,7 +33,7 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="h-9 px-4 rounded-lg border border-divider text-sm font-heading font-semibold hover:bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)]"
+            className="btn btn-outlined"
           >
             Cancel
           </button>
@@ -41,7 +41,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="h-9 px-4 rounded-lg bg-err text-white text-sm font-heading font-semibold disabled:opacity-50"
+            className="btn btn-danger"
           >
             {busy ? "Working…" : confirmLabel}
           </button>

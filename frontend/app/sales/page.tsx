@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
-import InvoiceDialog from "@/components/sales/InvoiceDialog";
+import PaymentDialog, { type PaymentValue } from "@/components/finance/PaymentDialog";
 import InvoiceDrawer from "@/components/sales/InvoiceDrawer";
+import { recordReceipt } from "@/lib/payments";
 import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
@@ -14,12 +16,8 @@ import TableSkeleton from "@/components/ui/TableSkeleton";
 import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import {
-  type SalesInvoice,
-  type SalesInvoiceInput,
-  createSale,
-  listSales,
-} from "@/lib/sales";
+import { useI18n } from "@/lib/i18n";
+import { type SalesInvoice, listSales } from "@/lib/sales";
 
 export default function SalesPage() {
   return (
@@ -31,13 +29,15 @@ export default function SalesPage() {
 
 
 function SalesContent() {
+  const { t } = useI18n();
   const { token, logout } = useAuth();
   const qc = useQueryClient();
+  const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<SalesInvoice | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [paying, setPaying] = useState<SalesInvoice | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
 
   const search = useDebounced(searchInput);
 
@@ -60,13 +60,21 @@ function SalesContent() {
     return list;
   }, [data, statusFilter]);
 
-  const createMut = useMutation({
-    mutationFn: (input: SalesInvoiceInput) => createSale(token as string, input),
+  const payMut = useMutation({
+    mutationFn: (v: PaymentValue) =>
+      recordReceipt(token as string, {
+        invoice_id: (paying as SalesInvoice).id,
+        amount: v.amount ?? undefined,
+        mode_of_payment: v.mode_of_payment,
+        posting_date: v.posting_date,
+        reference_no: v.reference_no,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sales"] });
-      setCreating(false);
+      setPaying(null);
+      setViewing(null);
     },
-    onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
+    onError: (e) => setPayError(e instanceof Error ? e.message : "Failed"),
   });
 
   return (
@@ -74,25 +82,22 @@ function SalesContent() {
       <nav className="flex items-center gap-2 text-xs muted mb-3">
         <span>EquiMed</span>
         <span>›</span>
-        <span className="text-ink">Sales</span>
+        <span className="text-ink">{t("sales.title")}</span>
       </nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-5">
         <div>
-          <h1 className="text-[32px] mb-1">Sales</h1>
+          <h1 className="text-[32px] mb-1">{t("sales.title")}</h1>
           <p className="muted text-sm m-0">
-            Invoices to hospitals, clinics and pharmacies
+            {t("sales.subtitle")}
           </p>
         </div>
         <button
           type="button"
-          onClick={() => {
-            setFormError(null);
-            setCreating(true);
-          }}
-          className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          onClick={() => router.push("/sales/new")}
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          New invoice
+          {t("sales.newInvoice")}
         </button>
       </div>
 
@@ -103,7 +108,7 @@ function SalesContent() {
           </span>
           <input
             className="eq-field w-full h-[38px] pl-8 pr-3 text-sm"
-            placeholder="Filter by customer…"
+            placeholder={t("sales.filterCustomer")}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -113,10 +118,10 @@ function SalesContent() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="">All statuses</option>
-          <option value="Paid">Paid</option>
-          <option value="Unpaid">Unpaid</option>
-          <option value="Overdue">Overdue</option>
+          <option value="">{t("sales.allStatuses")}</option>
+          <option value="Paid">{t("sales.status.paid")}</option>
+          <option value="Unpaid">{t("sales.status.unpaid")}</option>
+          <option value="Overdue">{t("sales.status.overdue")}</option>
         </select>
       </div>
 
@@ -125,14 +130,21 @@ function SalesContent() {
           <table className="w-full text-sm border-collapse min-w-[760px]">
             <thead>
               <tr className="muted">
-                {["Invoice", "Customer", "Date", "Amount", "Status", ""].map((h, i) => (
+                {[
+                  { label: t("sales.col.invoice"), right: false },
+                  { label: t("sales.col.customer"), right: false },
+                  { label: t("sales.col.date"), right: false },
+                  { label: t("sales.col.amount"), right: true },
+                  { label: t("common.status"), right: false },
+                  { label: "", right: false },
+                ].map((h, i) => (
                   <th
                     key={i}
                     className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${
                       i === 0 ? "text-left pl-5" : "text-left"
-                    } ${h === "Amount" ? "!text-right" : ""}`}
+                    } ${h.right ? "!text-right" : ""}`}
                   >
-                    {h}
+                    {h.label}
                   </th>
                 ))}
               </tr>
@@ -143,13 +155,13 @@ function SalesContent() {
               ) : error ? (
                 <tr>
                   <td colSpan={6} className="py-10 text-center muted">
-                    Could not load invoices.
+                    {t("sales.loadError")}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center muted-2">
-                    No invoices match your filters.
+                    {t("sales.empty")}
                   </td>
                 </tr>
               ) : (
@@ -178,20 +190,30 @@ function SalesContent() {
         </div>
       </Blueprint>
 
-      {creating && (
-        <InvoiceDialog
-          token={token as string}
-          busy={createMut.isPending}
-          error={formError}
-          onCancel={() => setCreating(false)}
-          onSubmit={(input) => {
-            setFormError(null);
-            createMut.mutate(input);
+      {viewing && (
+        <InvoiceDrawer
+          invoice={viewing}
+          onClose={() => setViewing(null)}
+          onRecordPayment={() => {
+            setPayError(null);
+            setPaying(viewing);
           }}
         />
       )}
-      {viewing && (
-        <InvoiceDrawer invoice={viewing} onClose={() => setViewing(null)} />
+      {paying && (
+        <PaymentDialog
+          mode="receive"
+          party={paying.customer}
+          reference={paying.id}
+          outstanding={paying.outstanding_amount}
+          busy={payMut.isPending}
+          error={payError}
+          onCancel={() => setPaying(null)}
+          onSubmit={(v) => {
+            setPayError(null);
+            payMut.mutate(v);
+          }}
+        />
       )}
     </div>
   );

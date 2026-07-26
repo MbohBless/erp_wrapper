@@ -1,11 +1,13 @@
 import Blueprint from "@/components/Blueprint";
 import type { TrendPoint } from "@/lib/api";
 import { shortDate } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 const W = 640;
 const H = 220;
 
 export default function TrendChart({ data }: { data: TrendPoint[] }) {
+  const { t } = useI18n();
   const max = Math.max(...data.map((d) => d.amount), 1);
   const step = W / Math.max(data.length - 1, 1);
   const y = (v: number) => H - 21 - (v / max) * (H - 42);
@@ -17,22 +19,22 @@ export default function TrendChart({ data }: { data: TrendPoint[] }) {
     <Blueprint className="p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-[10px] tracking-[0.12em] uppercase text-accent">Trend</div>
+          <div className="text-[10px] tracking-[0.12em] uppercase text-accent">{t("dashboard.trend")}</div>
           <div className="font-heading font-semibold text-[17px]">
-            Sales &amp; Revenue
+            {t("dashboard.salesRevenue")}
           </div>
         </div>
         <div className="flex gap-4 text-xs items-center">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-0.5 bg-accent" />
-            Revenue
+            {t("dashboard.kpi.revenue")}
           </span>
         </div>
       </div>
 
       {data.length === 0 ? (
         <div className="py-14 text-center muted-2 text-sm">
-          No revenue recorded in this period.
+          {t("dashboard.noRevenue")}
         </div>
       ) : (
         <>

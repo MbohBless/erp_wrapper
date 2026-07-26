@@ -138,6 +138,20 @@ class ERPNextClient:
         )
         return resp.json().get("message", {})
 
+    async def call_method(
+        self, method: str, args: dict | None = None, http_method: str = "POST"
+    ) -> Any:
+        """Call a whitelisted ERPNext server method and return its `message`."""
+        kwargs: dict[str, Any] = {}
+        if args:
+            if http_method == "GET":
+                kwargs["params"] = {k: json.dumps(v) if not isinstance(v, str) else v
+                                    for k, v in args.items()}
+            else:
+                kwargs["json"] = args
+        resp = await self._request(http_method, f"/api/method/{method}", **kwargs)
+        return resp.json().get("message")
+
 
 def get_erpnext_client() -> ERPNextClient:
     """FastAPI dependency provider for the ERPNext client."""
@@ -181,6 +195,9 @@ async def create_invoice(
     items: list[dict],
     due_date: str | None = None,
     posting_date: str | None = None,
+    remarks: str | None = None,
+    update_stock: bool = False,
+    taxes_and_charges: str | None = None,
     submit: bool = True,
 ) -> dict:
     """Create a Sales Invoice. `items`: [{"item_code", "qty", "rate"}, ...].
@@ -192,6 +209,12 @@ async def create_invoice(
         payload["due_date"] = due_date
     if posting_date:
         payload["posting_date"] = posting_date
+    if remarks:
+        payload["remarks"] = remarks
+    if update_stock:
+        payload["update_stock"] = 1
+    if taxes_and_charges:
+        payload["taxes_and_charges"] = taxes_and_charges
     doc = await client.create_document("Sales Invoice", payload)
     if submit:
         doc = await client.submit_document("Sales Invoice", doc["name"])
@@ -205,6 +228,7 @@ async def create_purchase(
     items: list[dict],
     bill_no: str | None = None,
     posting_date: str | None = None,
+    remarks: str | None = None,
     submit: bool = True,
 ) -> dict:
     """Create a Purchase Invoice (supplier bill). `items`: [{"item_code", "qty", "rate"}, ...].
@@ -216,6 +240,8 @@ async def create_purchase(
         payload["bill_no"] = bill_no
     if posting_date:
         payload["posting_date"] = posting_date
+    if remarks:
+        payload["remarks"] = remarks
     doc = await client.create_document("Purchase Invoice", payload)
     if submit:
         doc = await client.submit_document("Purchase Invoice", doc["name"])

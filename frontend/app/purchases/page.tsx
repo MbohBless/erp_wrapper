@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
-import BillDialog from "@/components/purchases/BillDialog";
+import PaymentDialog, { type PaymentValue } from "@/components/finance/PaymentDialog";
 import BillDrawer from "@/components/purchases/BillDrawer";
+import { recordPayment } from "@/lib/payments";
 import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
@@ -14,12 +16,8 @@ import TableSkeleton from "@/components/ui/TableSkeleton";
 import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import {
-  type PurchaseInput,
-  type PurchaseInvoice,
-  createPurchase,
-  listPurchases,
-} from "@/lib/purchases";
+import { useI18n } from "@/lib/i18n";
+import { type PurchaseInvoice, listPurchases } from "@/lib/purchases";
 
 export default function PurchasesPage() {
   return (
@@ -31,13 +29,15 @@ export default function PurchasesPage() {
 
 
 function PurchasesContent() {
+  const { t } = useI18n();
   const { token, logout } = useAuth();
   const qc = useQueryClient();
+  const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<PurchaseInvoice | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [paying, setPaying] = useState<PurchaseInvoice | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
 
   const search = useDebounced(searchInput);
 
@@ -60,13 +60,21 @@ function PurchasesContent() {
     return list;
   }, [data, statusFilter]);
 
-  const createMut = useMutation({
-    mutationFn: (input: PurchaseInput) => createPurchase(token as string, input),
+  const payMut = useMutation({
+    mutationFn: (v: PaymentValue) =>
+      recordPayment(token as string, {
+        bill_id: (paying as PurchaseInvoice).id,
+        amount: v.amount ?? undefined,
+        mode_of_payment: v.mode_of_payment,
+        posting_date: v.posting_date,
+        reference_no: v.reference_no,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchases"] });
-      setCreating(false);
+      setPaying(null);
+      setViewing(null);
     },
-    onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
+    onError: (e) => setPayError(e instanceof Error ? e.message : "Failed"),
   });
 
   return (
@@ -74,23 +82,20 @@ function PurchasesContent() {
       <nav className="flex items-center gap-2 text-xs muted mb-3">
         <span>EquiMed</span>
         <span>›</span>
-        <span className="text-ink">Purchases</span>
+        <span className="text-ink">{t("purchases.title")}</span>
       </nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-5">
         <div>
-          <h1 className="text-[32px] mb-1">Purchases</h1>
-          <p className="muted text-sm m-0">Supplier bills and goods received</p>
+          <h1 className="text-[32px] mb-1">{t("purchases.title")}</h1>
+          <p className="muted text-sm m-0">{t("purchases.subtitle")}</p>
         </div>
         <button
           type="button"
-          onClick={() => {
-            setFormError(null);
-            setCreating(true);
-          }}
-          className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          onClick={() => router.push("/purchases/new")}
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          New purchase
+          {t("purchases.newPurchase")}
         </button>
       </div>
 
@@ -101,7 +106,7 @@ function PurchasesContent() {
           </span>
           <input
             className="eq-field w-full h-[38px] pl-8 pr-3 text-sm"
-            placeholder="Filter by supplier…"
+            placeholder={t("purchases.filterSupplier")}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -111,10 +116,10 @@ function PurchasesContent() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="">All statuses</option>
-          <option value="Paid">Paid</option>
-          <option value="Unpaid">Unpaid</option>
-          <option value="Overdue">Overdue</option>
+          <option value="">{t("purchases.allStatuses")}</option>
+          <option value="Paid">{t("purchases.status.paid")}</option>
+          <option value="Unpaid">{t("purchases.status.unpaid")}</option>
+          <option value="Overdue">{t("purchases.status.overdue")}</option>
         </select>
       </div>
 
@@ -123,14 +128,21 @@ function PurchasesContent() {
           <table className="w-full text-sm border-collapse min-w-[800px]">
             <thead>
               <tr className="muted">
-                {["Bill", "Supplier", "Date", "Amount", "Status", ""].map((h, i) => (
+                {[
+                  { label: t("purchases.col.bill"), right: false },
+                  { label: t("purchases.col.supplier"), right: false },
+                  { label: t("purchases.col.date"), right: false },
+                  { label: t("purchases.col.amount"), right: true },
+                  { label: t("common.status"), right: false },
+                  { label: "", right: false },
+                ].map((h, i) => (
                   <th
                     key={i}
                     className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${
                       i === 0 ? "text-left pl-5" : "text-left"
-                    } ${h === "Amount" ? "!text-right" : ""}`}
+                    } ${h.right ? "!text-right" : ""}`}
                   >
-                    {h}
+                    {h.label}
                   </th>
                 ))}
               </tr>
@@ -141,13 +153,13 @@ function PurchasesContent() {
               ) : error ? (
                 <tr>
                   <td colSpan={6} className="py-10 text-center muted">
-                    Could not load purchases.
+                    {t("purchases.loadError")}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center muted-2">
-                    No purchases match your filters.
+                    {t("purchases.empty")}
                   </td>
                 </tr>
               ) : (
@@ -176,19 +188,31 @@ function PurchasesContent() {
         </div>
       </Blueprint>
 
-      {creating && (
-        <BillDialog
-          token={token as string}
-          busy={createMut.isPending}
-          error={formError}
-          onCancel={() => setCreating(false)}
-          onSubmit={(input) => {
-            setFormError(null);
-            createMut.mutate(input);
+      {viewing && (
+        <BillDrawer
+          bill={viewing}
+          onClose={() => setViewing(null)}
+          onRecordPayment={() => {
+            setPayError(null);
+            setPaying(viewing);
           }}
         />
       )}
-      {viewing && <BillDrawer bill={viewing} onClose={() => setViewing(null)} />}
+      {paying && (
+        <PaymentDialog
+          mode="pay"
+          party={paying.supplier}
+          reference={paying.id}
+          outstanding={paying.outstanding_amount}
+          busy={payMut.isPending}
+          error={payError}
+          onCancel={() => setPaying(null)}
+          onSubmit={(v) => {
+            setPayError(null);
+            payMut.mutate(v);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import ProductDialog from "@/components/products/ProductDialog";
 import ProductDrawer from "@/components/products/ProductDrawer";
 import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
@@ -15,13 +15,11 @@ import TableSkeleton from "@/components/ui/TableSkeleton";
 import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   type Product,
-  type ProductInput,
-  createProduct,
   deleteProduct,
   listProducts,
-  updateProduct,
 } from "@/lib/products";
 
 export default function ProductsPage() {
@@ -34,14 +32,14 @@ export default function ProductsPage() {
 
 
 type Dialog =
-  | { kind: "create" }
-  | { kind: "edit"; product: Product }
   | { kind: "view"; product: Product }
   | { kind: "delete"; product: Product }
   | null;
 
 function ProductsContent() {
   const { token, logout } = useAuth();
+  const { t } = useI18n();
+  const router = useRouter();
   const qc = useQueryClient();
 
   const [searchInput, setSearchInput] = useState("");
@@ -75,62 +73,37 @@ function ProductsContent() {
     return list;
   }, [data, categoryFilter, statusFilter]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["products"] });
-
-  const createMut = useMutation({
-    mutationFn: (input: ProductInput) => createProduct(token as string, input),
-    onSuccess: () => {
-      invalidate();
-      setDialog(null);
-    },
-    onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
-  });
-  const updateMut = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: ProductInput }) =>
-      updateProduct(token as string, id, input),
-    onSuccess: () => {
-      invalidate();
-      setDialog(null);
-    },
-    onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
-  });
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteProduct(token as string, id),
     onSuccess: () => {
-      invalidate();
+      qc.invalidateQueries({ queryKey: ["products"] });
       setDialog(null);
     },
     onError: (e) => setFormError(e instanceof Error ? e.message : "Failed"),
   });
 
-  function openCreate() {
-    setFormError(null);
-    setDialog({ kind: "create" });
-  }
-  function openEdit(product: Product) {
-    setFormError(null);
-    setDialog({ kind: "edit", product });
-  }
+  const openEdit = (product: Product) =>
+    router.push(`/products/${encodeURIComponent(product.id)}/edit`);
 
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
         <span>EquiMed</span>
         <span>›</span>
-        <span className="text-ink">Products</span>
+        <span className="text-ink">{t("products.title")}</span>
       </nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-5">
         <div>
-          <h1 className="text-[32px] mb-1">Products</h1>
-          <p className="muted text-sm m-0">Catalogue of medical equipment &amp; supplies</p>
+          <h1 className="text-[32px] mb-1">{t("products.title")}</h1>
+          <p className="muted text-sm m-0">{t("products.subtitle")}</p>
         </div>
         <button
           type="button"
-          onClick={openCreate}
-          className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          onClick={() => router.push("/products/new")}
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          New product
+          {t("products.new")}
         </button>
       </div>
 
@@ -141,7 +114,7 @@ function ProductsContent() {
           </span>
           <input
             className="eq-field w-full h-[38px] pl-8 pr-3 text-sm"
-            placeholder="Filter products…"
+            placeholder={t("products.filterPlaceholder")}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -151,7 +124,7 @@ function ProductsContent() {
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
         >
-          <option value="">All categories</option>
+          <option value="">{t("products.allCategories")}</option>
           {categories.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -163,9 +136,9 @@ function ProductsContent() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
+          <option value="">{t("products.allStatuses")}</option>
+          <option value="active">{t("common.active")}</option>
+          <option value="disabled">{t("common.disabled")}</option>
         </select>
       </div>
 
@@ -174,18 +147,24 @@ function ProductsContent() {
           <table className="w-full text-sm border-collapse min-w-[880px]">
             <thead>
               <tr className="muted">
-                {["Product", "SKU", "Category", "Unit", "Selling", "Status", ""].map(
-                  (h, i) => (
-                    <th
-                      key={i}
-                      className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${
-                        i === 0 ? "text-left pl-5" : "text-left"
-                      } ${h === "Selling" ? "!text-right pr-5" : ""}`}
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
+                {[
+                  { label: t("products.colProduct") },
+                  { label: t("products.colSku") },
+                  { label: t("products.colCategory") },
+                  { label: t("products.colUnit") },
+                  { label: t("products.selling"), right: true },
+                  { label: t("common.status") },
+                  { label: "" },
+                ].map((h, i) => (
+                  <th
+                    key={i}
+                    className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${
+                      i === 0 ? "text-left pl-5" : "text-left"
+                    } ${h.right ? "!text-right pr-5" : ""}`}
+                  >
+                    {h.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -194,13 +173,13 @@ function ProductsContent() {
               ) : error ? (
                 <tr>
                   <td colSpan={7} className="py-10 text-center muted">
-                    Could not load products.
+                    {t("products.loadError")}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center muted-2">
-                    No products match your filters.
+                    {t("products.empty")}
                   </td>
                 </tr>
               ) : (
@@ -237,23 +216,6 @@ function ProductsContent() {
         </div>
       </Blueprint>
 
-      {(dialog?.kind === "create" || dialog?.kind === "edit") && (
-        <ProductDialog
-          initial={dialog.kind === "edit" ? dialog.product : null}
-          busy={createMut.isPending || updateMut.isPending}
-          error={formError}
-          onCancel={() => setDialog(null)}
-          onSubmit={(input) => {
-            setFormError(null);
-            if (dialog.kind === "edit") {
-              updateMut.mutate({ id: dialog.product.id, input });
-            } else {
-              createMut.mutate(input);
-            }
-          }}
-        />
-      )}
-
       {dialog?.kind === "view" && (
         <ProductDrawer
           product={dialog.product}
@@ -264,9 +226,9 @@ function ProductsContent() {
 
       {dialog?.kind === "delete" && (
         <ConfirmDialog
-          title="Delete product"
-          message={`Delete “${dialog.product.name}”? This cannot be undone.`}
-          confirmLabel="Delete"
+          title={t("products.deleteTitle")}
+          message={`${t("action.delete")} “${dialog.product.name}” — ${t("common.deleteConfirm")}`}
+          confirmLabel={t("action.delete")}
           busy={deleteMut.isPending}
           error={formError}
           onCancel={() => setDialog(null)}

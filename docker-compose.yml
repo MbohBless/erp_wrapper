@@ -122,14 +122,13 @@ services:
           exit 0;
         fi;
         echo "Creating site ${SITE_NAME:-equimed.local} ...";
-        bench new-site \
+        bench new-site "${SITE_NAME:-equimed.local}" \
           --mariadb-user-host-login-scope='%' \
           --admin-password="${ADMIN_PASSWORD:-admin}" \
           --db-root-username=root \
           --db-root-password="${DB_ROOT_PASSWORD:-admin}" \
           --install-app erpnext \
-          --set-default "${SITE_NAME:-equimed.local}" \
-          "${SITE_NAME:-equimed.local}";
+          --set-default;
     volumes: *erpnext_volumes
     depends_on:
       erpnext-configurator:
@@ -172,6 +171,7 @@ services:
   # ERPNext's own nginx (serves assets + proxies to gunicorn/websocket).
   erpnext-nginx:
     <<: *erpnext_image
+    command: ["nginx-entrypoint.sh"]
     environment:
       BACKEND: erpnext-backend:8000
       SOCKETIO: erpnext-websocket:9000

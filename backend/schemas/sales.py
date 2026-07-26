@@ -7,6 +7,7 @@ class InvoiceLineInput(BaseModel):
     item_code: str = Field(min_length=1, max_length=140)
     qty: float = Field(gt=0)
     rate: float = Field(ge=0)
+    description: str | None = None
 
 
 class SalesInvoiceCreate(BaseModel):
@@ -14,6 +15,9 @@ class SalesInvoiceCreate(BaseModel):
     items: list[InvoiceLineInput] = Field(min_length=1)
     due_date: str | None = None
     posting_date: str | None = None
+    remarks: str | None = None
+    update_stock: bool = False
+    taxes_and_charges: str | None = None
 
 
 class InvoiceLine(BaseModel):
@@ -31,4 +35,5 @@ class SalesInvoiceRead(BaseModel):
     grand_total: float
     outstanding_amount: float
     status: str
+    remarks: str | None = None
     items: list[InvoiceLine] = []

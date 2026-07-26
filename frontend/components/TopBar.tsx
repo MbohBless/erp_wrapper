@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Icon } from "@/components/icons";
+import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 
 export default function TopBar({
@@ -15,6 +16,7 @@ export default function TopBar({
   onLogout: () => void;
 }) {
   const { theme, toggle } = useTheme();
+  const { t } = useI18n();
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const initials = (user ?? "AM").slice(0, 2).toUpperCase();
@@ -36,7 +38,7 @@ export default function TopBar({
         </span>
         <input
           className="eq-field w-full h-10 pl-9 pr-14 text-sm"
-          placeholder="Search products, invoices, hospitals, batches…"
+          placeholder={t("topbar.search")}
         />
         <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] muted-2 border border-divider px-1.5 rounded">
           ⌘K

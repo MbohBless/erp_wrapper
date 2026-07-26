@@ -12,11 +12,13 @@ from database import get_db
 from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role, User
 from repositories.batch_repository import BatchRepository
+from repositories.company_repository import CompanyRepository
 from repositories.customer_repository import CustomerRepository
 from repositories.dashboard_repository import DashboardRepository
 from repositories.equipment_repository import EquipmentRepository
 from repositories.finance_repository import FinanceRepository
 from repositories.maintenance_repository import MaintenanceRepository
+from repositories.payment_repository import PaymentRepository
 from repositories.product_repository import ProductRepository
 from repositories.purchase_repository import PurchaseRepository
 from repositories.sales_repository import SalesRepository
@@ -26,14 +28,17 @@ from repositories.supplier_repository import SupplierRepository
 from repositories.user_repository import UserRepository
 from repositories.warehouse_repository import WarehouseRepository
 from services.auth_service import AuthService
+from services.company_service import CompanyService
 from services.customer_service import CustomerService
 from services.dashboard_service import DashboardService
 from services.equipment_service import EquipmentService
 from services.finance_service import FinanceService
 from services.inventory_service import InventoryService
 from services.maintenance_service import MaintenanceService
+from services.payment_service import PaymentService
 from services.product_service import ProductService
 from services.purchase_service import PurchaseService
+from services.report_service import ReportService
 from services.sales_service import SalesService
 from services.supplier_service import SupplierService
 from services.user_service import UserService
@@ -90,6 +95,7 @@ get_maintenance_service = erpnext_service(
     lambda c: MaintenanceService(MaintenanceRepository(c))
 )
 get_finance_service = erpnext_service(lambda c: FinanceService(FinanceRepository(c)))
+get_payment_service = erpnext_service(lambda c: PaymentService(PaymentRepository(c)))
 get_dashboard_service = erpnext_service(
     lambda c: DashboardService(DashboardRepository(c))
 )
@@ -101,6 +107,27 @@ get_inventory_service = erpnext_service(
         stock_entries=StockEntryRepository(c),
     )
 )
+
+
+def _build_inventory_service(client: ERPNextClient) -> InventoryService:
+    return InventoryService(
+        warehouses=WarehouseRepository(client),
+        batches=BatchRepository(client),
+        stock=StockRepository(client),
+        stock_entries=StockEntryRepository(client),
+    )
+
+
+def get_report_service(
+    client: ERPNextClient = Depends(get_erpnext_client),
+    db: Session = Depends(get_db),
+) -> ReportService:
+    profile = CompanyService(CompanyRepository(db)).get_profile().model_dump()
+    return ReportService(
+        finance=FinanceService(FinanceRepository(client)),
+        inventory=_build_inventory_service(client),
+        profile=profile,
+    )
 
 
 # --- Authentication ---

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import BatchDialog from "@/components/inventory/BatchDialog";
-import GoodsMovementDialog from "@/components/inventory/GoodsMovementDialog";
 import WarehouseDialog from "@/components/inventory/WarehouseDialog";
 import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
@@ -15,28 +15,26 @@ import StatusTag, { ActiveTag, type Tone } from "@/components/ui/StatusTag";
 import TableSkeleton from "@/components/ui/TableSkeleton";
 import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   type Batch,
   type BatchInput,
-  type MovementInput,
   type Warehouse,
   type WarehouseInput,
   createBatch,
   createWarehouse,
   deleteWarehouse,
-  issueGoods,
   listBatches,
   listStock,
   listWarehouses,
-  receiveGoods,
   updateWarehouse,
 } from "@/lib/inventory";
 
 type Tab = "stock" | "warehouses" | "batches";
-const TABS: { key: Tab; label: string }[] = [
-  { key: "stock", label: "Stock" },
-  { key: "warehouses", label: "Warehouses" },
-  { key: "batches", label: "Batches" },
+const TABS: { key: Tab; labelKey: string }[] = [
+  { key: "stock", labelKey: "inventory.tabStock" },
+  { key: "warehouses", labelKey: "inventory.tabWarehouses" },
+  { key: "batches", labelKey: "inventory.tabBatches" },
 ];
 
 export default function InventoryPage() {
@@ -49,6 +47,7 @@ export default function InventoryPage() {
 
 function InventoryContent() {
   const { token, logout } = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("stock");
 
   const warehousesQ = useQuery({
@@ -66,30 +65,30 @@ function InventoryContent() {
       <nav className="flex items-center gap-2 text-xs muted mb-3">
         <span>EquiMed</span>
         <span>›</span>
-        <span>Operations</span>
+        <span>{t("inventory.operations")}</span>
         <span>›</span>
-        <span className="text-ink">Inventory</span>
+        <span className="text-ink">{t("inventory.title")}</span>
       </nav>
       <div className="mb-5">
-        <h1 className="text-[32px] mb-1">Inventory</h1>
+        <h1 className="text-[32px] mb-1">{t("inventory.title")}</h1>
         <p className="muted text-sm m-0">
-          Stock levels, warehouses and batch tracking
+          {t("inventory.subtitle")}
         </p>
       </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-divider mb-5">
-        {TABS.map((t) => (
+        {TABS.map((tb) => (
           <button
-            key={t.key}
+            key={tb.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => setTab(tb.key)}
             className={`relative px-4 py-2.5 text-sm font-heading font-semibold -mb-px ${
-              tab === t.key ? "text-ink" : "muted hover:text-ink"
+              tab === tb.key ? "text-ink" : "muted hover:text-ink"
             }`}
           >
-            {t.label}
-            {tab === t.key && (
+            {t(tb.labelKey)}
+            {tab === tb.key && (
               <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent" />
             )}
           </button>
@@ -108,18 +107,17 @@ function InventoryContent() {
 }
 
 // -------------------------------------------------------------- Stock tab
-function stockStatus(qty: number): { label: string; tone: Tone } {
-  if (qty <= 0) return { label: "Out", tone: "err" };
-  if (qty <= 10) return { label: "Low", tone: "warn" };
-  return { label: "In stock", tone: "ok" };
+function stockStatus(qty: number): { key: string; tone: Tone } {
+  if (qty <= 0) return { key: "inventory.stockOut", tone: "err" };
+  if (qty <= 10) return { key: "inventory.stockLow", tone: "warn" };
+  return { key: "inventory.stockIn", tone: "ok" };
 }
 
 function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[] }) {
-  const qc = useQueryClient();
+  const { t } = useI18n();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [warehouseFilter, setWarehouseFilter] = useState("");
-  const [movement, setMovement] = useState<"receive" | "issue" | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["stock"],
@@ -136,16 +134,6 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
     return list;
   }, [data, search, warehouseFilter]);
 
-  const move = useMutation({
-    mutationFn: (input: MovementInput) =>
-      movement === "receive" ? receiveGoods(token, input) : issueGoods(token, input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["stock"] });
-      setMovement(null);
-    },
-    onError: (e) => setError(e instanceof Error ? e.message : "Failed"),
-  });
-
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2.5 mb-4">
@@ -155,7 +143,7 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
           </span>
           <input
             className="eq-field w-full h-[38px] pl-8 pr-3 text-sm"
-            placeholder="Filter by product SKU…"
+            placeholder={t("inventory.filterSku")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -165,7 +153,7 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
           value={warehouseFilter}
           onChange={(e) => setWarehouseFilter(e.target.value)}
         >
-          <option value="">All warehouses</option>
+          <option value="">{t("inventory.allWarehouses")}</option>
           {warehouses.map((w) => (
             <option key={w.id} value={w.id}>
               {w.name}
@@ -175,24 +163,18 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
         <div className="flex-1" />
         <button
           type="button"
-          onClick={() => {
-            setError(null);
-            setMovement("issue");
-          }}
-          className="h-[38px] px-3.5 inline-flex items-center gap-2 rounded-lg border border-divider text-sm font-heading font-semibold hover:bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)]"
+          onClick={() => router.push("/inventory/new?mode=issue")}
+          className="btn btn-outlined"
         >
-          Issue
+          {t("inventory.issue")}
         </button>
         <button
           type="button"
-          onClick={() => {
-            setError(null);
-            setMovement("receive");
-          }}
-          className="h-[38px] px-3.5 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          onClick={() => router.push("/inventory/new?mode=receive")}
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          Receive
+          {t("inventory.receive")}
         </button>
       </div>
 
@@ -201,18 +183,23 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
           <table className="w-full text-sm border-collapse min-w-[820px]">
             <thead>
               <tr className="muted">
-                {["Product", "Warehouse", "Actual", "Reserved", "Projected", "Status"].map(
-                  (h, i) => (
-                    <th
-                      key={h}
-                      className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${
-                        i === 0 ? "text-left pl-5" : "text-left"
-                      } ${["Actual", "Reserved", "Projected"].includes(h) ? "!text-right" : ""}`}
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
+                {[
+                  { label: t("inventory.colProduct") },
+                  { label: t("inventory.colWarehouse") },
+                  { label: t("inventory.colActual"), right: true },
+                  { label: t("inventory.colReserved"), right: true },
+                  { label: t("inventory.colProjected"), right: true },
+                  { label: t("common.status") },
+                ].map((h, i) => (
+                  <th
+                    key={i}
+                    className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${
+                      i === 0 ? "text-left pl-5" : "text-left"
+                    } ${h.right ? "!text-right" : ""}`}
+                  >
+                    {h.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -221,7 +208,7 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center muted-2">
-                    No stock records.
+                    {t("inventory.noStock")}
                   </td>
                 </tr>
               ) : (
@@ -235,7 +222,7 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
                       <td className="py-3 text-right muted">{s.reserved_qty ?? 0}</td>
                       <td className="py-3 text-right muted">{s.projected_qty ?? s.actual_qty}</td>
                       <td className="py-3">
-                        <StatusTag label={st.label} tone={st.tone} />
+                        <StatusTag label={t(st.key)} tone={st.tone} />
                       </td>
                     </tr>
                   );
@@ -245,20 +232,6 @@ function StockTab({ token, warehouses }: { token: string; warehouses: Warehouse[
           </table>
         </div>
       </Blueprint>
-
-      {movement && (
-        <GoodsMovementDialog
-          mode={movement}
-          warehouses={warehouses}
-          busy={move.isPending}
-          error={error}
-          onCancel={() => setMovement(null)}
-          onSubmit={(input) => {
-            setError(null);
-            move.mutate(input);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -273,6 +246,7 @@ function WarehousesTab({
   warehouses: Warehouse[];
   loading: boolean;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState<
     { kind: "create" } | { kind: "edit"; w: Warehouse } | { kind: "delete"; w: Warehouse } | null
@@ -302,10 +276,10 @@ function WarehousesTab({
         <button
           type="button"
           onClick={() => { setError(null); setDialog({ kind: "create" }); }}
-          className="h-[38px] px-3.5 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          New warehouse
+          {t("inventory.newWarehouse")}
         </button>
       </div>
       <Blueprint className="p-0 overflow-hidden">
@@ -313,7 +287,7 @@ function WarehousesTab({
           <table className="w-full text-sm border-collapse min-w-[720px]">
             <thead>
               <tr className="muted">
-                {["Warehouse", "Parent", "Type", "Status", ""].map((h, i) => (
+                {[t("inventory.colWarehouse"), t("inventory.colParent"), t("inventory.colType"), t("common.status"), ""].map((h, i) => (
                   <th key={i} className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${i === 0 ? "text-left pl-5" : "text-left"}`}>
                     {h}
                   </th>
@@ -324,13 +298,13 @@ function WarehousesTab({
               {loading ? (
                 <TableSkeleton cols={5} />
               ) : warehouses.length === 0 ? (
-                <tr><td colSpan={5} className="py-12 text-center muted-2">No warehouses yet.</td></tr>
+                <tr><td colSpan={5} className="py-12 text-center muted-2">{t("inventory.noWarehouses")}</td></tr>
               ) : (
                 warehouses.map((w) => (
                   <tr key={w.id} className="group border-b border-solid divide-soft hover:bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)]">
                     <td className="pl-5 py-3 font-medium">{w.name}</td>
                     <td className="py-3 muted">{w.parent_warehouse ?? "—"}</td>
-                    <td className="py-3 muted">{w.is_group ? "Group" : "Storage"}</td>
+                    <td className="py-3 muted">{w.is_group ? t("inventory.typeGroup") : t("inventory.typeStorage")}</td>
                     <td className="py-3">
                       <ActiveTag disabled={w.disabled} />
                     </td>
@@ -364,9 +338,9 @@ function WarehousesTab({
       )}
       {dialog?.kind === "delete" && (
         <ConfirmDialog
-          title="Delete warehouse"
-          message={`Delete “${dialog.w.name}”? This cannot be undone.`}
-          confirmLabel="Delete"
+          title={t("inventory.deleteWarehouse")}
+          message={`${t("action.delete")} “${dialog.w.name}” — ${t("common.deleteConfirm")}`}
+          confirmLabel={t("action.delete")}
           busy={deleteMut.isPending}
           error={error}
           onCancel={() => setDialog(null)}
@@ -379,6 +353,7 @@ function WarehousesTab({
 
 // ------------------------------------------------------------ Batches tab
 function BatchesTab({ token }: { token: string }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -403,10 +378,10 @@ function BatchesTab({ token }: { token: string }) {
         <button
           type="button"
           onClick={() => { setError(null); setCreating(true); }}
-          className="h-[38px] px-3.5 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+          className="btn btn-filled"
         >
           <Icon name="plus" size={15} sw={1.8} />
-          New batch
+          {t("inventory.newBatch")}
         </button>
       </div>
       <Blueprint className="p-0 overflow-hidden">
@@ -414,9 +389,15 @@ function BatchesTab({ token }: { token: string }) {
           <table className="w-full text-sm border-collapse min-w-[720px]">
             <thead>
               <tr className="muted">
-                {["Batch", "Product", "Expiry", "Manufactured", "Qty"].map((h, i) => (
-                  <th key={h} className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${i === 0 ? "text-left pl-5" : "text-left"} ${h === "Qty" ? "!text-right pr-5" : ""}`}>
-                    {h}
+                {[
+                  { label: t("inventory.colBatch") },
+                  { label: t("inventory.colProduct") },
+                  { label: t("inventory.colExpiry") },
+                  { label: t("inventory.colManufactured") },
+                  { label: t("inventory.colQty"), right: true },
+                ].map((h, i) => (
+                  <th key={i} className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${i === 0 ? "text-left pl-5" : "text-left"} ${h.right ? "!text-right pr-5" : ""}`}>
+                    {h.label}
                   </th>
                 ))}
               </tr>
@@ -425,7 +406,7 @@ function BatchesTab({ token }: { token: string }) {
               {isLoading ? (
                 <TableSkeleton cols={5} />
               ) : (data ?? []).length === 0 ? (
-                <tr><td colSpan={5} className="py-12 text-center muted-2">No batches yet.</td></tr>
+                <tr><td colSpan={5} className="py-12 text-center muted-2">{t("inventory.noBatches")}</td></tr>
               ) : (
                 (data ?? []).map((b: Batch) => (
                   <tr key={b.id} className="border-b border-solid divide-soft">

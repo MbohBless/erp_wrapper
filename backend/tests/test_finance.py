@@ -17,6 +17,9 @@ class FinanceStub:
     ):
         return self.data.get(doctype, [])
 
+    async def get_document(self, doctype, name):
+        return {"year_start_date": "2026-01-01", "year_end_date": "2026-12-31"}
+
     async def run_report(self, report_name, filters=None):
         self.last_report = {"report_name": report_name, "filters": filters or {}}
         return {"report_name": report_name, "result": []}

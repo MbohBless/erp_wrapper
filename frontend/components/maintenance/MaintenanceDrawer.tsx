@@ -1,6 +1,7 @@
 "use client";
 
 import Drawer, { DetailRow } from "@/components/ui/Drawer";
+import { useI18n } from "@/lib/i18n";
 import type { Ticket } from "@/lib/maintenance";
 
 export default function MaintenanceDrawer({
@@ -16,6 +17,7 @@ export default function MaintenanceDrawer({
   onComplete: () => void;
   completing: boolean;
 }) {
+  const { t } = useI18n();
   const canComplete = ticket.status !== "Completed" && ticket.status !== "Cancelled";
   return (
     <Drawer
@@ -29,35 +31,35 @@ export default function MaintenanceDrawer({
               type="button"
               onClick={onComplete}
               disabled={completing}
-              className="h-10 px-4 rounded-lg border border-divider text-sm font-heading font-semibold hover:bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)] disabled:opacity-50"
+              className="btn btn-outlined"
             >
-              {completing ? "Completing…" : "Complete & sign"}
+              {completing ? t("maintenance.completing") : t("maintenance.complete")}
             </button>
           )}
           <button
             type="button"
             onClick={onEdit}
-            className="h-10 px-4 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600"
+            className="btn btn-filled"
           >
-            Edit
+            {t("action.edit")}
           </button>
         </>
       }
     >
-      <DetailRow label="Customer" value={ticket.customer} />
-      <DetailRow label="Equipment" value={ticket.equipment ?? ""} />
-      <DetailRow label="Engineer" value={ticket.engineer ?? ""} />
-      <DetailRow label="Visit date" value={ticket.visit_date ?? ""} />
-      <DetailRow label="Status" value={ticket.status} />
+      <DetailRow label={t("maintenance.field.customer")} value={ticket.customer} />
+      <DetailRow label={t("maintenance.col.equipment")} value={ticket.equipment ?? ""} />
+      <DetailRow label={t("maintenance.field.engineerShort")} value={ticket.engineer ?? ""} />
+      <DetailRow label={t("maintenance.field.visitDate")} value={ticket.visit_date ?? ""} />
+      <DetailRow label={t("common.status")} value={ticket.status} />
       <DetailRow
-        label="Customer signature"
-        value={ticket.customer_signed ? "Signed" : "Not signed"}
+        label={t("maintenance.field.signature")}
+        value={ticket.customer_signed ? t("maintenance.signed") : t("maintenance.notSigned")}
       />
 
       {ticket.description && (
         <div className="mt-5">
           <div className="text-[11px] tracking-[0.08em] uppercase muted mb-1.5">
-            Description
+            {t("maintenance.field.description")}
           </div>
           <div className="text-sm">{ticket.description}</div>
         </div>
@@ -65,7 +67,7 @@ export default function MaintenanceDrawer({
       {ticket.parts_used && (
         <div className="mt-5">
           <div className="text-[11px] tracking-[0.08em] uppercase muted mb-1.5">
-            Parts used
+            {t("maintenance.field.parts")}
           </div>
           <div className="text-sm">{ticket.parts_used}</div>
         </div>

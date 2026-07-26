@@ -6,10 +6,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import CompanyBrandingSection from "@/components/settings/CompanyBrandingSection";
 import UserDialog, { type UserFormValue } from "@/components/settings/UserDialog";
 import { Icon } from "@/components/icons";
 import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { LANGS, useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import {
   type User,
@@ -31,6 +33,7 @@ export default function SettingsPage() {
 function SettingsContent() {
   const { token, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const { t, lang, setLang } = useI18n();
 
   const meQ = useQuery({
     queryKey: ["me"],
@@ -41,60 +44,77 @@ function SettingsContent() {
     if (meQ.error instanceof UnauthorizedError) logout();
   }, [meQ.error, logout]);
 
-  const isAdmin = meQ.data?.role === "Administrator";
+  const role = meQ.data?.role;
+  const isAdmin = role === "Administrator";
+  const canBrand = isAdmin || role === "Manager" || role === "Accountant";
 
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span><span>›</span><span className="text-ink">Settings</span>
+        <span>EquiMed</span><span>›</span><span className="text-ink">{t("settings.title")}</span>
       </nav>
       <div className="mb-6">
-        <h1 className="text-[32px] mb-1">Settings</h1>
-        <p className="muted text-sm m-0">Profile, company, users, roles and preferences</p>
+        <h1 className="text-[32px] mb-1">{t("settings.title")}</h1>
+        <p className="muted text-sm m-0">{t("settings.subtitle")}</p>
       </div>
 
       <div className="max-w-[1000px] flex flex-col gap-5">
         {/* Profile */}
-        <Section title="Your profile">
+        <Section title={t("settings.yourProfile")}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <ReadOnly label="Full name" value={meQ.data?.full_name ?? "…"} />
-            <ReadOnly label="Email" value={meQ.data?.email ?? "…"} />
-            <ReadOnly label="Role" value={meQ.data?.role ?? "…"} />
+            <ReadOnly label={t("settings.fullName")} value={meQ.data?.full_name ?? "…"} />
+            <ReadOnly label={t("settings.email")} value={meQ.data?.email ?? "…"} />
+            <ReadOnly label={t("settings.role")} value={meQ.data?.role ?? "…"} />
           </div>
         </Section>
 
-        {/* Company */}
-        <Section title="Company information" note="Configured in ERPNext">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <ReadOnly label="Company name" value="EquiMed SA" />
-            <ReadOnly label="Country" value="Cameroon" />
-            <ReadOnly label="Chart of accounts" value="SYSCOHADA" />
-            <ReadOnly label="Registered address" value="Bonanjo, Douala, Cameroon" />
-          </div>
-        </Section>
+        {/* Company & branding (report letterhead) */}
+        {token && <CompanyBrandingSection token={token} canEdit={canBrand} />}
 
         {/* Regional */}
-        <Section title="Regional & currency" note="Configured in ERPNext">
+        <Section title={t("settings.regional")} note="ERPNext">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <ReadOnly label="Base currency" value="XAF — Central African CFA franc" />
-            <ReadOnly label="Timezone" value="GMT+1 · Africa/Douala" />
+            <ReadOnly label={t("settings.baseCurrency")} value="XAF — Central African CFA franc" />
+            <ReadOnly label={t("settings.timezone")} value="GMT+1 · Africa/Douala" />
           </div>
         </Section>
 
         {/* Preferences */}
-        <Section title="Preferences">
+        <Section title={t("settings.preferences")}>
           <div className="flex items-center justify-between py-1.5">
             <div>
-              <div className="text-sm font-medium">Appearance</div>
-              <div className="text-xs muted">Switch between light and dark across the app</div>
+              <div className="text-sm font-medium">{t("settings.appearance")}</div>
+              <div className="text-xs muted">{t("settings.appearanceDesc")}</div>
             </div>
             <button
               type="button"
               onClick={toggle}
-              className="h-9 px-4 rounded-lg border border-divider text-sm font-heading font-semibold capitalize hover:bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)]"
+              className="btn btn-outlined capitalize"
             >
               {theme}
             </button>
+          </div>
+          <div className="flex items-center justify-between py-1.5 mt-2 border-t border-solid divide-soft pt-4">
+            <div>
+              <div className="text-sm font-medium">{t("settings.language")}</div>
+              <div className="text-xs muted">{t("settings.languageDesc")}</div>
+            </div>
+            <div className="flex items-center gap-1 p-1 rounded-full border border-divider">
+              {LANGS.map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setLang(l)}
+                  className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                    lang === l
+                      ? "bg-accent text-bg font-medium"
+                      : "muted hover:text-ink"
+                  }`}
+                >
+                  {t(`lang.${l}`)}
+                </button>
+              ))}
+            </div>
           </div>
         </Section>
 
@@ -105,6 +125,7 @@ function SettingsContent() {
 }
 
 function UsersSection({ token, meId }: { token: string; meId?: number }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["users"], queryFn: () => listUsers(token) });
   const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "edit"; u: User } | { kind: "delete"; u: User } | null>(null);
@@ -131,23 +152,23 @@ function UsersSection({ token, meId }: { token: string; meId?: number }) {
   return (
     <Blueprint className="p-0 overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-divider">
-        <span className="font-heading font-semibold text-base">Users &amp; roles</span>
-        <button type="button" onClick={() => { setError(null); setDialog({ kind: "create" }); }} className="h-9 px-3.5 inline-flex items-center gap-2 rounded-lg bg-accent text-bg text-sm font-heading font-semibold hover:bg-accent-600">
-          <Icon name="plus" size={14} sw={1.8} />New user
+        <span className="font-heading font-semibold text-base">{t("settings.usersRoles")}</span>
+        <button type="button" onClick={() => { setError(null); setDialog({ kind: "create" }); }} className="btn btn-filled">
+          <Icon name="plus" size={14} sw={1.8} />{t("settings.newUser")}
         </button>
       </div>
       <div className="overflow-x-auto eq-scroll">
         <table className="w-full text-sm border-collapse min-w-[620px]">
           <thead>
             <tr className="muted">
-              {["Name", "Email", "Role", "Status", ""].map((h, i) => (
+              {[t("settings.fullName"), t("settings.email"), t("settings.role"), t("common.status"), ""].map((h, i) => (
                 <th key={i} className={`text-[11px] tracking-[0.08em] uppercase font-semibold py-3 border-b border-divider ${i === 0 ? "text-left pl-6" : "text-left"}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={5} className="py-8 text-center muted-2">Loading…</td></tr>
+              <tr><td colSpan={5} className="py-8 text-center muted-2">{t("common.loading")}</td></tr>
             ) : (
               (data ?? []).map((u) => (
                 <tr key={u.id} className="group border-b border-solid divide-soft">
@@ -213,7 +234,7 @@ function Section({ title, note, children }: { title: string; note?: string; chil
 function ReadOnly({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <label className="block text-xs muted mb-1.5">{label}</label>
+      <label className="block text-[13px] muted mb-2">{label}</label>
       <div className="eq-field w-full px-3 py-2.5 text-sm bg-[color-mix(in_srgb,var(--color-text)_3%,transparent)]">{value}</div>
     </div>
   );

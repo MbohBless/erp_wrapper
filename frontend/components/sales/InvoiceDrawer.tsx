@@ -3,20 +3,36 @@
 import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import type { SalesInvoice } from "@/lib/sales";
 
 export default function InvoiceDrawer({
   invoice,
   onClose,
+  onRecordPayment,
 }: {
   invoice: SalesInvoice;
   onClose: () => void;
+  onRecordPayment?: () => void;
 }) {
+  const { t } = useI18n();
+  const footer =
+    onRecordPayment && invoice.outstanding_amount > 0 ? (
+      <button type="button" onClick={onRecordPayment} className="btn btn-filled">
+        {t("sales.recordReceipt")}
+      </button>
+    ) : undefined;
   return (
-    <Drawer eyebrow="Sales invoice" title={invoice.id} onClose={onClose} width="max-w-[460px]">
+    <Drawer
+      eyebrow={t("sales.drawer.eyebrow")}
+      title={invoice.id}
+      onClose={onClose}
+      width="max-w-[460px]"
+      footer={footer}
+    >
       <div className="flex justify-between mb-5">
         <div>
-          <div className="text-xs muted mb-1">Customer</div>
+          <div className="text-xs muted mb-1">{t("sales.col.customer")}</div>
           <div className="font-medium">{invoice.customer}</div>
         </div>
         <StatusTag label={invoice.status} tone={invoiceTone(invoice.status)} dot={false} />
@@ -24,11 +40,11 @@ export default function InvoiceDrawer({
 
       <div className="grid grid-cols-2 gap-3 mb-6 text-sm">
         <div>
-          <div className="text-xs muted mb-1">Posting date</div>
+          <div className="text-xs muted mb-1">{t("sales.postingDate")}</div>
           <div>{invoice.posting_date ?? "—"}</div>
         </div>
         <div>
-          <div className="text-xs muted mb-1">Due date</div>
+          <div className="text-xs muted mb-1">{t("sales.dueDate")}</div>
           <div>{invoice.due_date ?? "—"}</div>
         </div>
       </div>
@@ -36,33 +52,41 @@ export default function InvoiceDrawer({
       <LineItems items={invoice.items} />
 
       <div className="flex justify-between py-1.5 text-sm">
-        <span className="muted">Grand total</span>
+        <span className="muted">{t("sales.grandTotal")}</span>
         <span className="font-semibold">{xaf(invoice.grand_total)}</span>
       </div>
       <div className="flex justify-between py-1.5 text-sm">
-        <span className="muted">Outstanding</span>
+        <span className="muted">{t("sales.outstanding")}</span>
         <span className="font-semibold">{xaf(invoice.outstanding_amount)}</span>
       </div>
+
+      {invoice.remarks && (
+        <div className="mt-5">
+          <div className="text-[11px] tracking-[0.08em] uppercase muted mb-1.5">{t("sales.remarks")}</div>
+          <div className="text-sm">{invoice.remarks}</div>
+        </div>
+      )}
     </Drawer>
   );
 }
 
 function LineItems({ items }: { items: SalesInvoice["items"] }) {
+  const { t } = useI18n();
   return (
     <>
-      <div className="text-[11px] tracking-[0.08em] uppercase muted mb-2">Line items</div>
+      <div className="text-[11px] tracking-[0.08em] uppercase muted mb-2">{t("sales.lineItems")}</div>
       <div className="blueprint p-0 overflow-hidden mb-5">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="muted">
               <th className="text-left text-[11px] uppercase font-semibold px-3 py-2 border-b border-divider">
-                Item
+                {t("sales.col.item")}
               </th>
               <th className="text-right text-[11px] uppercase font-semibold px-3 py-2 border-b border-divider">
-                Qty
+                {t("sales.col.qty")}
               </th>
               <th className="text-right text-[11px] uppercase font-semibold px-3 py-2 border-b border-divider">
-                Amount
+                {t("sales.col.amount")}
               </th>
             </tr>
           </thead>
@@ -70,7 +94,7 @@ function LineItems({ items }: { items: SalesInvoice["items"] }) {
             {items.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-3 py-4 text-center muted-2">
-                  No line items.
+                  {t("sales.noLineItems")}
                 </td>
               </tr>
             ) : (

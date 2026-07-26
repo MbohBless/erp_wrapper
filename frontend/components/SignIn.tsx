@@ -42,7 +42,7 @@ export default function SignIn() {
             </div>
           )}
 
-          <label className="block text-xs muted mb-1.5" htmlFor="email">
+          <label className="block text-[13px] muted mb-2" htmlFor="email">
             Email
           </label>
           <input
@@ -55,7 +55,7 @@ export default function SignIn() {
             required
           />
 
-          <label className="block text-xs muted mb-1.5" htmlFor="password">
+          <label className="block text-[13px] muted mb-2" htmlFor="password">
             Password
           </label>
           <input
@@ -71,7 +71,7 @@ export default function SignIn() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full h-10 rounded-lg bg-accent text-bg font-heading font-semibold text-sm hover:bg-accent-600 disabled:opacity-50"
+            className="btn btn-filled w-full"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
