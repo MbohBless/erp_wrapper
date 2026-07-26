@@ -96,7 +96,7 @@ export type OhadaLine = {
   label: string;
   amount: number;
   level: number;
-  kind: "header" | "line" | "subtotal" | "total";
+  kind: "header" | "line" | "subtotal" | "total" | "note";
 };
 export type OhadaStatement = {
   title: string;
@@ -120,3 +120,8 @@ export const getOhadaCashFlow = (
   token: string,
   params: { company: string; fiscal_year?: string }
 ) => api.get<OhadaStatement>(token, "/finance/reports/ohada/flux-de-tresorerie", params);
+
+export const getOhadaEtatAnnexe = (
+  token: string,
+  params: { company: string; fiscal_year?: string }
+) => api.get<OhadaStatement>(token, "/finance/reports/ohada/etat-annexe", params);

@@ -6,6 +6,7 @@ export type ReportKey =
   | "compte-de-resultat"
   | "bilan"
   | "flux-de-tresorerie"
+  | "etat-annexe"
   | "receivables"
   | "payables"
   | "current-stock"

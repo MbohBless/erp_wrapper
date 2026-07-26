@@ -183,7 +183,13 @@ installation_date, warranty_expiry_date, status }`.
 | GET | `/finance/reports/balance-sheet` | ERPNext Balance Sheet; same query params |
 | GET | `/finance/reports/ohada/compte-de-resultat` | **OHADA Système Normal** — Compte de résultat par nature with the SIG cascade (marge commerciale → VA → EBE → résultat d'exploitation/financier → RAO → HAO → résultat net). Built from the SYSCOHADA Trial Balance. Query `company` (req), `fiscal_year`, `from_date`, `to_date` |
 | GET | `/finance/reports/ohada/bilan` | **OHADA Système Normal** — Bilan (Actif/Passif, list presentation) with reference codes. Same query params |
-| GET | `/finance/reports/ohada/flux-de-tresorerie` | **OHADA Système Normal** — Tableau des Flux de Trésorerie (direct method): treasury GL movements classified by counter-account class (2→investing, 1→financing, else operating). Same query params |
+| GET | `/finance/reports/ohada/flux-de-tresorerie` | **OHADA** — Tableau des Flux de Trésorerie (direct method): treasury GL movements classified by counter-account class (2→investing, 1→financing, else operating). Same query params |
+| GET | `/finance/reports/ohada/etat-annexe` | **OHADA** — État annexé (notes annexes): principal notes built from the trial balance (méthodes, immobilisations, stocks, créances, trésorerie, capitaux, dettes, produits, charges). Same query params |
+
+The Compte de résultat and Bilan honour the **OHADA regime** stored on the
+company profile (`ohada_regime`: `Système Normal` → full statements with the SIG
+cascade; `Système Minimal de Trésorerie` → simplified). A `regime` query param
+overrides it per request.
 
 ---
 
@@ -197,7 +203,7 @@ recent_activity[] }` (aggregated from ERPNext invoices, payments and bins).
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/reports/{report_key}/pdf` | Branded, **cryptographically signed (PAdES)** PDF. `report_key` ∈ `receivables`, `payables`, `current-stock`, `low-stock`, `income-statement`, `balance-sheet`, **`compte-de-resultat`**, **`bilan`**, **`flux-de-tresorerie`** (the last three are the OHADA statutory statements). Query (per report): `company` (req. for statements), `fiscal_year`, `from_date`, `to_date`, `warehouse`. Returns `application/pdf` (attachment). |
+| GET | `/reports/{report_key}/pdf` | Branded, **cryptographically signed (PAdES)** PDF. `report_key` ∈ `receivables`, `payables`, `current-stock`, `low-stock`, `income-statement`, `balance-sheet`, **`compte-de-resultat`**, **`bilan`**, **`flux-de-tresorerie`**, **`etat-annexe`** (the last four are the OHADA statutory statements/notes). Query (per report): `company` (req. for statements), `fiscal_year`, `from_date`, `to_date`, `warehouse`. Returns `application/pdf` (attachment). |
 
 Rendering: reportlab letterhead (logo, legal details, signatory block) → signed with
 pyHanko using a self-signed certificate auto-provisioned in `/app/data/signing`
@@ -209,7 +215,7 @@ services; branding comes from the company profile below.
 | Method | Path | Access | Notes |
 | --- | --- | --- | --- |
 | GET | `/settings/company-profile` | any authenticated | Singleton branding profile (letterhead + signatory + accent + logo data-URI). |
-| PUT | `/settings/company-profile` | Manager, Accountant | Full replacement of the editable branding fields. Stored in the app DB, not ERPNext. |
+| PUT | `/settings/company-profile` | Manager, Accountant | Full replacement of the editable branding fields (incl. `ohada_regime`). Stored in the app DB, not ERPNext. |
 
 ## Health  — *public*
 

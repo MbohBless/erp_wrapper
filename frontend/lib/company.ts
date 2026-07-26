@@ -15,6 +15,7 @@ export type CompanyProfile = {
   currency: string;
   signatory_name: string;
   signatory_title: string;
+  ohada_regime: string;
   accent_color: string;
   logo_data_url: string;
 };

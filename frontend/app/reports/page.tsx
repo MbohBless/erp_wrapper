@@ -15,6 +15,7 @@ import {
   getIncomeStatement,
   getOhadaBalanceSheet,
   getOhadaCashFlow,
+  getOhadaEtatAnnexe,
   getOhadaIncomeStatement,
 } from "@/lib/finance";
 import { useI18n } from "@/lib/i18n";
@@ -37,6 +38,7 @@ const GROUPS: { gid: string; items: ReportDef[] }[] = [
       { key: "compte-de-resultat", title: "Compte de Résultat", desc: "OHADA · résultat par nature (SIG).", icon: "finance", kind: "ohada" },
       { key: "bilan", title: "Bilan", desc: "OHADA · Actif / Passif (Système Normal).", icon: "finance", kind: "ohada" },
       { key: "flux-de-tresorerie", title: "Tableau des Flux", desc: "OHADA · flux de trésorerie (méthode directe).", icon: "finance", kind: "ohada" },
+      { key: "etat-annexe", title: "État Annexé", desc: "OHADA · notes annexes.", icon: "reports", kind: "ohada" },
     ],
   },
   {
@@ -179,7 +181,7 @@ function ReportsContent() {
             {token && def.kind === "outstanding" && <OutstandingPreview token={token} kind={selected as "receivables" | "payables"} />}
             {token && def.kind === "stock" && <StockPreview token={token} lowOnly={selected === "low-stock"} warehouse={warehouse} />}
             {token && def.kind === "statement" && <StatementPreview token={token} kind={selected as "income-statement" | "balance-sheet"} company={company} fiscalYear={fiscalYear} />}
-            {token && def.kind === "ohada" && <OhadaPreview token={token} statementKey={selected as "compte-de-resultat" | "bilan" | "flux-de-tresorerie"} company={company} fiscalYear={fiscalYear} />}
+            {token && def.kind === "ohada" && <OhadaPreview token={token} statementKey={selected as OhadaKey} company={company} fiscalYear={fiscalYear} />}
           </div>
         </div>
       </div>
@@ -254,9 +256,11 @@ const OHADA_FETCHERS = {
   "compte-de-resultat": getOhadaIncomeStatement,
   bilan: getOhadaBalanceSheet,
   "flux-de-tresorerie": getOhadaCashFlow,
+  "etat-annexe": getOhadaEtatAnnexe,
 };
+type OhadaKey = keyof typeof OHADA_FETCHERS;
 
-function OhadaPreview({ token, statementKey, company, fiscalYear }: { token: string; statementKey: "compte-de-resultat" | "bilan" | "flux-de-tresorerie"; company: string; fiscalYear: string }) {
+function OhadaPreview({ token, statementKey, company, fiscalYear }: { token: string; statementKey: OhadaKey; company: string; fiscalYear: string }) {
   const { t } = useI18n();
   const [result, setResult] = useState<OhadaStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -286,13 +290,14 @@ function OhadaPreview({ token, statementKey, company, fiscalYear }: { token: str
                 );
               }
               const strong = l.kind === "subtotal" || l.kind === "total";
+              const isNote = l.kind === "note";
               return (
                 <tr key={i} className={`border-b border-solid divide-soft ${l.kind === "total" ? "border-t-2 border-t-accent" : ""}`}>
-                  <td className={`py-1.5 pr-3 ${strong ? "font-semibold" : ""}`} style={{ paddingLeft: l.level * 16 }}>
+                  <td className={`py-1.5 pr-3 ${strong ? "font-semibold" : ""} ${isNote ? "muted text-[13px]" : ""}`} style={{ paddingLeft: l.level * 16 }}>
                     {l.code && <span className="muted-3 num text-[11px] mr-2">{l.code}</span>}
                     {l.label}
                   </td>
-                  <td className={`py-1.5 text-right num tabular-nums ${strong ? "font-semibold" : ""}`}>{xaf(l.amount)}</td>
+                  <td className={`py-1.5 text-right num tabular-nums ${strong ? "font-semibold" : ""}`}>{isNote ? "" : xaf(l.amount)}</td>
                 </tr>
               );
             })}

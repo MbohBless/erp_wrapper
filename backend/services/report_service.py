@@ -77,7 +77,7 @@ class ReportService:
             doc = await self._stock(key, warehouse, base_meta)
         elif key in ("income-statement", "balance-sheet"):
             doc = await self._statement(key, company, fiscal_year, from_date, to_date, base_meta)
-        elif key in ("compte-de-resultat", "bilan", "flux-de-tresorerie"):
+        elif key in _OHADA_KEYS:
             doc = await self._ohada(key, company, fiscal_year, from_date, to_date, base_meta)
         else:
             raise HTTPException(status_code=404, detail=f"Unknown report '{key}'")
@@ -158,14 +158,21 @@ class ReportService:
     async def _ohada(self, key, company, fiscal_year, from_date, to_date, base_meta) -> ReportDoc:
         if not company:
             raise HTTPException(status_code=422, detail="`company` is required for this report.")
+        regime = self.profile.get("ohada_regime") or "Système Normal"
         fn = {
             "compte-de-resultat": self.finance.ohada_income_statement,
             "bilan": self.finance.ohada_balance_sheet,
             "flux-de-tresorerie": self.finance.ohada_cash_flow,
+            "etat-annexe": self.finance.ohada_etat_annexe,
         }[key]
-        stmt = await fn(company, fiscal_year, from_date, to_date)
+        if key in ("compte-de-resultat", "bilan"):
+            stmt = await fn(company, fiscal_year, from_date, to_date, regime)
+        else:
+            stmt = await fn(company, fiscal_year, from_date, to_date)
         meta = list(base_meta)
         meta.append(("Entité", company))
+        if key in ("compte-de-resultat", "bilan"):
+            meta.append(("Régime", regime))
         if fiscal_year:
             meta.append(("Exercice", fiscal_year))
         elif from_date or to_date:
@@ -175,7 +182,7 @@ class ReportService:
         bold: set[int] = set()
         for i, ln in enumerate(stmt.lines):
             label = (f"{ln.code}  " if ln.code else "") + ln.label
-            amount = "" if ln.kind == "header" else _money(ln.amount, self.currency)
+            amount = "" if ln.kind in ("header", "note") else _money(ln.amount, self.currency)
             rows.append([label, amount])
             indents.append(ln.level)
             if ln.kind in ("header", "subtotal", "total"):

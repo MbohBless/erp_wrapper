@@ -36,6 +36,14 @@ class _Ledger:
         """Net crédit (positive for products/liabilities/equity)."""
         return round(sum(a["credit"] - a["debit"] for a in self._match(prefixes)), 2)
 
+    def debit_only(self, *prefixes: str) -> float:
+        """Sum of per-account net-débit balances (créances side of mixed classes)."""
+        return round(sum(max(a["debit"] - a["credit"], 0) for a in self._match(prefixes)), 2)
+
+    def credit_only(self, *prefixes: str) -> float:
+        """Sum of per-account net-crédit balances (dettes side of mixed classes)."""
+        return round(sum(max(a["credit"] - a["debit"], 0) for a in self._match(prefixes)), 2)
+
 
 def _r(x: float) -> float:
     return round(x, 2)
@@ -167,8 +175,10 @@ def bilan(
     actif_immobilise = _r(immob_incorp + immob_corp + immob_fin)
 
     stocks = L.debit("31", "32", "33", "34", "35", "36", "38", "39")
-    creances = L.debit("41", "42", "43", "44", "45", "46", "47", "48", "49")
-    creances = _r(max(creances, 0))
+    # Per-account sign split so client receivables aren't cancelled by supplier
+    # payables (both live in class 4).
+    _class4 = ("40", "41", "42", "43", "44", "45", "46", "47", "48", "49")
+    creances = L.debit_only(*_class4)
     actif_circulant = _r(stocks + creances)
 
     tresorerie_actif = L.debit("50", "51", "52", "53", "54", "57", "58")
@@ -186,8 +196,7 @@ def bilan(
     dettes_financieres = L.credit("16", "17", "18", "19")
     ressources_stables = _r(capitaux_propres + dettes_financieres)
 
-    dettes_circulantes = L.credit("40", "42", "43", "44", "45", "46", "47", "48")
-    dettes_circulantes = _r(max(dettes_circulantes, 0))
+    dettes_circulantes = L.credit_only(*_class4)
 
     tresorerie_passif = L.credit("561", "564", "565", "566", "52")
     tresorerie_passif = _r(max(tresorerie_passif, 0))
@@ -311,9 +320,10 @@ def _smt_compte_de_resultat(accounts: list[dict], fiscal_year: str | None) -> Oh
 
 def _smt_bilan(accounts: list[dict], fiscal_year: str | None) -> OhadaStatement:
     L = _Ledger(accounts)
+    _class4 = ("40", "41", "42", "43", "44", "45", "46", "47", "48", "49")
     immob = _r(L.debit("2"))
     stocks = _r(L.debit("3"))
-    creances = _r(max(L.debit("41", "42", "43", "44", "45", "46", "47", "48", "49"), 0))
+    creances = L.debit_only(*_class4)
     tresorerie = _r(max(L.debit("5"), 0))
     total_actif = _r(immob + stocks + creances + tresorerie)
 
@@ -321,7 +331,7 @@ def _smt_bilan(accounts: list[dict], fiscal_year: str | None) -> OhadaStatement:
     capital = _r(L.credit("10", "11", "12", "14", "15"))
     capitaux = _r(capital + resultat)
     dettes_fin = _r(L.credit("16", "17", "18", "19"))
-    dettes = _r(max(L.credit("40", "42", "43", "44", "45", "46", "47", "48"), 0))
+    dettes = L.credit_only(*_class4)
     tresorerie_passif = _r(max(L.credit("561", "564", "565", "566"), 0))
     total_passif = _r(capitaux + dettes_fin + dettes + tresorerie_passif)
 
@@ -356,14 +366,18 @@ def _smt_bilan(accounts: list[dict], fiscal_year: str | None) -> OhadaStatement:
 def etat_annexe(
     accounts: list[dict], fiscal_year: str | None = None, currency: str = "XAF"
 ) -> OhadaStatement:
-    def leaves(prefixes: tuple[str, ...], credit: bool = False) -> list[OhadaLine]:
+    def leaves(prefixes: tuple[str, ...], credit: bool = False,
+               positive_only: bool = True) -> list[OhadaLine]:
         rows: list[OhadaLine] = []
         for a in sorted(accounts, key=lambda x: x["number"]):
             if a["number"].startswith(prefixes):
-                amt = (a["credit"] - a["debit"]) if credit else (a["debit"] - a["credit"])
-                if round(amt, 2) != 0:
-                    rows.append(OhadaLine(code=a["number"], label=a["name"], amount=_r(amt), level=1))
+                amt = _r((a["credit"] - a["debit"]) if credit else (a["debit"] - a["credit"]))
+                keep = amt > 0 if positive_only else amt != 0
+                if keep:
+                    rows.append(OhadaLine(code=a["number"], label=a["name"], amount=amt, level=1))
         return rows
+
+    _c4 = ("40", "41", "42", "43", "44", "45", "46", "47", "48", "49")
 
     lines: list[OhadaLine] = []
 
@@ -385,14 +399,18 @@ def etat_annexe(
     ):
         lines.append(OhadaLine(code="", label=txt, amount=0, kind="note"))
 
-    note("Note 3 — Immobilisations (classe 2)", leaves(("2",)))
+    note("Note 3 — Immobilisations brutes & amortissements (classe 2)",
+         leaves(("2",), positive_only=False))
     note("Note 6 — Stocks et en-cours (classe 3)", leaves(("3",)))
     note("Note 7 — Créances et emplois assimilés (classe 4 · débit)",
-         leaves(("41", "42", "43", "44", "45", "46", "47", "48", "49")))
-    note("Note 9 — Trésorerie (classe 5)", leaves(("5",)))
-    note("Note 15 — Capitaux propres (classe 1)", leaves(("1",), credit=True))
-    note("Note 16 — Dettes (classe 4 · crédit)",
-         leaves(("40", "42", "43", "44", "45", "46", "47", "48"), credit=True))
+         leaves(_c4, credit=False, positive_only=True))
+    note("Note 9 — Trésorerie (classe 5)", leaves(("5",), positive_only=False))
+    note("Note 15 — Capitaux propres (classe 1 · 10 à 15)",
+         leaves(("10", "11", "12", "13", "14", "15"), credit=True))
+    note("Note 16 — Dettes financières (classe 1 · 16 à 19)",
+         leaves(("16", "17", "18", "19"), credit=True))
+    note("Note 17 — Dettes circulantes (classe 4 · crédit)",
+         leaves(_c4, credit=True, positive_only=True))
     note("Note 21 — Chiffre d'affaires et autres produits (classe 7)", leaves(("7",), credit=True))
     note("Note 22 — Charges par nature (classe 6)", leaves(("6",)))
 

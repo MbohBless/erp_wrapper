@@ -131,6 +131,23 @@ export default function CompanyBrandingSection({ token, canEdit }: { token: stri
         ))}
       </div>
 
+      {/* OHADA reporting regime */}
+      <div className="mt-6 pt-5 border-t border-solid divide-soft">
+        <label className={LABEL}>OHADA reporting regime</label>
+        <select
+          className={`${FIELD} sm:max-w-md`}
+          value={form.ohada_regime || "Système Normal"}
+          disabled={disabled}
+          onChange={(e) => set("ohada_regime", e.target.value)}
+        >
+          <option value="Système Normal">Système Normal (full statements)</option>
+          <option value="Système Minimal de Trésorerie">Système Minimal de Trésorerie (SMT — simplified)</option>
+        </select>
+        <p className="text-xs muted mt-1.5">
+          Drives the presentation of the OHADA Compte de résultat and Bilan (full SIG cascade vs. simplified).
+        </p>
+      </div>
+
       {error && (
         <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2.5 rounded-xl text-[13px] mt-5">{error}</div>
       )}
