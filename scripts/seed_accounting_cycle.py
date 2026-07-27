@@ -1,12 +1,22 @@
 import frappe
-company="EquiMed"; CC="Main - E"; MARK="[SEED-OHADA-CYCLE]"
-SUP="Ubipharm Cameroun"; CUST="Centre Médical la Grâce"
+# Company = ERPNext global default; cost center resolved from the company.
+company = frappe.defaults.get_global_default("company") or frappe.get_all("Company", pluck="name")[0]
+CC = frappe.db.get_value("Company", company, "cost_center")
+MARK = "[SEED-OHADA-CYCLE]"
+SUP = frappe.db.get_value("Supplier", {}, "name")
+CUST = frappe.db.get_value("Customer", {}, "name")
 
 if frappe.db.exists("Journal Entry", {"company": company, "user_remark": ("like", "%"+MARK+"%")}):
     print("ALREADY_SEEDED"); raise SystemExit
 
 def acc(num):
-    return frappe.db.get_value("Account", {"company": company, "account_number": num}, "name")
+    # This SYSCOHADA chart leaves account_number blank; the number is the name
+    # prefix, e.g. "6011-Dans la Région - E". Resolve by name prefix, falling
+    # back to the account_number field if it is populated.
+    name = frappe.db.get_value("Account", {"company": company, "is_group": 0,
+                                           "name": ("like", num + "-%")}, "name")
+    return name or frappe.db.get_value("Account",
+                                       {"company": company, "account_number": num}, "name")
 
 missing=set()
 def je(date, title, lines):
