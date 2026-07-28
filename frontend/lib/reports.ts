@@ -3,6 +3,8 @@
 export type ReportKey =
   | "income-statement"
   | "balance-sheet"
+  | "trial-balance"
+  | "cash-flow"
   | "receivables"
   | "payables"
   | "current-stock"

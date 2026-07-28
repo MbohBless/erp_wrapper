@@ -8,10 +8,14 @@ import { Icon } from "@/components/icons";
 import { xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
+  type CashFlowResult,
   type StatementResult,
+  type TrialBalanceResult,
   getBalanceSheet,
+  getCashFlow,
   getFinanceSummary,
   getIncomeStatement,
+  getTrialBalance,
 } from "@/lib/finance";
 import { useI18n } from "@/lib/i18n";
 import { listStock, listWarehouses } from "@/lib/inventory";
@@ -32,6 +36,8 @@ const GROUPS: { gid: string; items: ReportDef[] }[] = [
     items: [
       { key: "income-statement", title: "Income Statement", desc: "Profit & loss for a fiscal year.", icon: "finance", kind: "statement" },
       { key: "balance-sheet", title: "Balance Sheet", desc: "Assets, liabilities and equity.", icon: "finance", kind: "statement" },
+      { key: "trial-balance", title: "Trial Balance", desc: "Debit & credit for every account.", icon: "finance", kind: "statement" },
+      { key: "cash-flow", title: "Cash Flow Statement", desc: "Cash in and out over the period.", icon: "finance", kind: "statement" },
       { key: "receivables", title: "Outstanding Receivables", desc: "Unpaid customer invoices.", icon: "receivable", kind: "outstanding" },
       { key: "payables", title: "Outstanding Payables", desc: "Unpaid supplier bills.", icon: "payable", kind: "outstanding" },
     ],
@@ -166,7 +172,9 @@ function ReportsContent() {
             <div className="text-[11px] tracking-[0.1em] uppercase muted-3 mb-3">{t("reports.preview")}</div>
             {token && def.kind === "outstanding" && <OutstandingPreview token={token} kind={selected as "receivables" | "payables"} />}
             {token && def.kind === "stock" && <StockPreview token={token} lowOnly={selected === "low-stock"} warehouse={warehouse} />}
-            {token && def.kind === "statement" && <StatementPreview token={token} kind={selected as "income-statement" | "balance-sheet"} company={company} fiscalYear={fiscalYear} />}
+            {token && def.kind === "statement" && (selected === "income-statement" || selected === "balance-sheet") && <StatementPreview token={token} kind={selected} company={company} fiscalYear={fiscalYear} />}
+            {token && selected === "trial-balance" && <TrialBalancePreview token={token} company={company} fiscalYear={fiscalYear} />}
+            {token && selected === "cash-flow" && <CashFlowPreview token={token} company={company} fiscalYear={fiscalYear} />}
           </div>
         </div>
       </div>
@@ -269,6 +277,92 @@ function StatementPreview({ token, kind, company, fiscalYear }: { token: string;
                 <td className="py-2 text-right font-semibold num">{xaf(r.amount)}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function TrialBalancePreview({ token, company, fiscalYear }: { token: string; company: string; fiscalYear: string }) {
+  const { t } = useI18n();
+  const [result, setResult] = useState<TrialBalanceResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = useMutation({
+    mutationFn: () => getTrialBalance(token, { company, fiscal_year: fiscalYear || undefined }),
+    onSuccess: (r) => { setError(null); setResult(r); },
+    onError: (e) => setError(e instanceof Error ? e.message : "Failed"),
+  });
+  return (
+    <div>
+      <button type="button" onClick={() => run.mutate()} disabled={run.isPending || !company} className="btn btn-outlined mb-4">
+        {run.isPending ? t("reports.generating") : result ? t("reports.refreshPreview") : t("reports.loadPreview")}
+      </button>
+      {error && <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2.5 rounded-xl text-[13px] mb-3">{error}</div>}
+      {!result ? (
+        <Muted text={t("reports.statementPrompt")} />
+      ) : result.rows.length === 0 ? (
+        <Muted text={t("reports.noData")} />
+      ) : (
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              <th className={`${TH} pl-1`}>Account</th>
+              <th className={`${TH} !text-right`}>Debit</th>
+              <th className={`${TH} !text-right`}>Credit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.rows.map((r, i) => (
+              <tr key={i} className="border-b border-solid divide-soft">
+                <td className="py-2 pl-1 font-medium">{r.account}</td>
+                <td className="py-2 text-right num muted">{r.debit ? xaf(r.debit) : "—"}</td>
+                <td className="py-2 text-right num muted">{r.credit ? xaf(r.credit) : "—"}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-divider font-semibold">
+              <td className="py-2.5 pl-1">Total</td>
+              <td className="py-2.5 text-right num">{xaf(result.total_debit)}</td>
+              <td className="py-2.5 text-right num">{xaf(result.total_credit)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function CashFlowPreview({ token, company, fiscalYear }: { token: string; company: string; fiscalYear: string }) {
+  const { t } = useI18n();
+  const [result, setResult] = useState<CashFlowResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const run = useMutation({
+    mutationFn: () => getCashFlow(token, { company: company || undefined, fiscal_year: fiscalYear || undefined }),
+    onSuccess: (r) => { setError(null); setResult(r); },
+    onError: (e) => setError(e instanceof Error ? e.message : "Failed"),
+  });
+  const line = (label: string, value: number, bold = false) => (
+    <tr className={`border-b border-solid divide-soft ${bold ? "font-semibold" : ""}`}>
+      <td className="py-2 pl-1">{label}</td>
+      <td className="py-2 text-right num">{xaf(value)}</td>
+    </tr>
+  );
+  return (
+    <div>
+      <button type="button" onClick={() => run.mutate()} disabled={run.isPending} className="btn btn-outlined mb-4">
+        {run.isPending ? t("reports.generating") : result ? t("reports.refreshPreview") : t("reports.loadPreview")}
+      </button>
+      {error && <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2.5 rounded-xl text-[13px] mb-3">{error}</div>}
+      {!result ? (
+        <Muted text={t("reports.statementPrompt")} />
+      ) : (
+        <table className="w-full text-sm border-collapse">
+          <tbody>
+            {line(t("finance.cf.opening"), result.opening, true)}
+            {line(t("finance.cf.totalReceived"), result.total_in, true)}
+            {line(t("finance.cf.totalPaid"), result.total_out, true)}
+            {line(t("finance.cf.net"), result.net_change, true)}
+            {line(t("finance.cf.closing"), result.closing, true)}
           </tbody>
         </table>
       )}

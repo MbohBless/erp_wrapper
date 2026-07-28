@@ -81,7 +81,73 @@ async def test_income_statement_normalisation():
     assert repo.client.last_filters["period_start_date"] == "2026-01-01"
 
 
+async def test_trial_balance_skips_groups_and_totals():
+    report = {
+        "result": [
+            {"account": "5211 - Bank", "account_name": "5211 Bank", "closing_debit": 1000, "closing_credit": 0},
+            {"account": "4011 - Suppliers", "account_name": "4011 Suppliers", "closing_debit": 0, "closing_credit": 700},
+            {"account": "ASSETS", "account_name": "Assets", "is_group": 1, "closing_debit": 1000, "closing_credit": 0},  # group -> skip
+            {"account": None, "account_name": "Total", "closing_debit": 1000, "closing_credit": 700},  # grand total -> skip
+            {"account": "9999 - Empty", "account_name": "Empty", "closing_debit": 0, "closing_credit": 0},  # nil -> skip
+        ]
+    }
+    repo = FinanceRepository(FinStub(report=report))
+    tb = await repo.trial_balance("EquiMed", fiscal_year="2026")
+    assert [r.account for r in tb.rows] == ["5211 Bank", "4011 Suppliers"]
+    assert tb.total_debit == 1000 and tb.total_credit == 700
+    # fiscal year was resolved to a date range for the report
+    assert repo.client.last_filters["from_date"] == "2026-01-01"
+
+
+class CashFlowStub(FinStub):
+    """Respects the account_type filter so cash and bank resolve to different
+    accounts (the plain FinStub ignores filters and would double-count)."""
+
+    def __init__(self, accounts_by_type, gl):
+        super().__init__()
+        self.accounts_by_type = accounts_by_type
+        self.gl = gl
+
+    async def list_documents(self, doctype, fields=None, filters=None, limit=20, start=0, order_by=None):
+        filters = filters or []
+        if doctype == "Account":
+            atype = next((f[2] for f in filters if f[0] == "account_type"), None)
+            return [{"name": n} for n in self.accounts_by_type.get(atype, [])]
+        if doctype == "GL Entry":
+            if any(f[1] == "<" for f in filters):
+                return []  # prior-period opening query
+            accts = next((f[2] for f in filters if f[0] == "account"), [])
+            return [e for e in self.gl if e["account"] in accts]
+        return []
+
+
+async def test_cash_flow_direct_method():
+    gl = [
+        {"account": "Caisse", "posting_date": "2026-03-01", "debit": 500, "credit": 0, "voucher_type": "Payment Entry", "voucher_no": "PE-1"},
+        {"account": "Banque", "posting_date": "2026-03-02", "debit": 1000, "credit": 0, "voucher_type": "Payment Entry", "voucher_no": "PE-2"},
+        {"account": "Banque", "posting_date": "2026-03-05", "debit": 0, "credit": 400, "voucher_type": "Journal Entry", "voucher_no": "JE-1"},
+    ]
+    repo = FinanceRepository(CashFlowStub({"Cash": ["Caisse"], "Bank": ["Banque"]}, gl))
+    cf = await repo.cash_flow(company="EquiMed", fiscal_year="2026")
+    assert cf.opening == 0
+    assert cf.total_in == 1500  # two Payment Entry inflows, aggregated
+    assert cf.total_out == 400
+    assert cf.net_change == 1100
+    assert cf.closing == 1100
+    assert [(l.label, l.amount) for l in cf.inflows] == [("Payment Entry", 1500)]
+    assert [(l.label, l.amount) for l in cf.outflows] == [("Journal Entry", 400)]
+
+
 # --- endpoint RBAC (via the in-memory fake) ---
+def test_trial_balance_cash_flow_rbac(client, make_token, fake_erpnext):
+    acct = make_token("Accountant")
+    assert client.get("/finance/trial-balance?company=EquiMed", headers=auth_header(acct)).status_code == 200
+    assert client.get("/finance/cash-flow?company=EquiMed", headers=auth_header(acct)).status_code == 200
+    sales = make_token("Sales")
+    assert client.get("/finance/trial-balance?company=EquiMed", headers=auth_header(sales)).status_code == 403
+    assert client.get("/finance/cash-flow", headers=auth_header(sales)).status_code == 403
+
+
 def test_receivable_endpoint_rbac(client, make_token, fake_erpnext):
     acct = make_token("Accountant")
     assert client.get("/finance/receivable", headers=auth_header(acct)).status_code == 200

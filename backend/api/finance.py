@@ -9,9 +9,11 @@ from api.deps import get_finance_service, require_roles
 from models.user import Role
 from schemas.finance import (
     BookResult,
+    CashFlowResult,
     FinanceSummary,
     LedgerResult,
     StatementResult,
+    TrialBalanceResult,
 )
 from services.finance_service import FinanceService
 
@@ -81,3 +83,25 @@ async def balance_sheet(
     service: FinanceService = Depends(get_finance_service),
 ) -> StatementResult:
     return await service.balance_sheet(company, fiscal_year, from_date, to_date, periodicity)
+
+
+@router.get("/trial-balance", response_model=TrialBalanceResult, dependencies=[Depends(can_view)])
+async def trial_balance(
+    company: str,
+    fiscal_year: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    service: FinanceService = Depends(get_finance_service),
+) -> TrialBalanceResult:
+    return await service.trial_balance(company, fiscal_year, from_date, to_date)
+
+
+@router.get("/cash-flow", response_model=CashFlowResult, dependencies=[Depends(can_view)])
+async def cash_flow(
+    company: str | None = None,
+    fiscal_year: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    service: FinanceService = Depends(get_finance_service),
+) -> CashFlowResult:
+    return await service.cash_flow(company, fiscal_year, from_date, to_date)

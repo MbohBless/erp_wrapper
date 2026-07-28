@@ -89,3 +89,35 @@ export const getBalanceSheet = (
   token: string,
   params: { company: string; fiscal_year?: string }
 ) => api.get<StatementResult>(token, "/finance/reports/balance-sheet", params);
+
+// ---- Trial balance ----
+export type TrialBalanceRow = { account: string; debit: number; credit: number };
+export type TrialBalanceResult = {
+  title: string;
+  rows: TrialBalanceRow[];
+  total_debit: number;
+  total_credit: number;
+};
+
+export const getTrialBalance = (
+  token: string,
+  params: { company: string; fiscal_year?: string }
+) => api.get<TrialBalanceResult>(token, "/finance/trial-balance", params);
+
+// ---- Cash flow statement (direct method) ----
+export type CashFlowLine = { label: string; amount: number };
+export type CashFlowResult = {
+  title: string;
+  opening: number;
+  closing: number;
+  total_in: number;
+  total_out: number;
+  net_change: number;
+  inflows: CashFlowLine[];
+  outflows: CashFlowLine[];
+};
+
+export const getCashFlow = (
+  token: string,
+  params: { company?: string; fiscal_year?: string }
+) => api.get<CashFlowResult>(token, "/finance/cash-flow", params);

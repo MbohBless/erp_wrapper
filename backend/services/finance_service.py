@@ -5,9 +5,11 @@ from datetime import date
 from repositories.finance_repository import FinanceRepository
 from schemas.finance import (
     BookResult,
+    CashFlowResult,
     FinanceSummary,
     LedgerResult,
     StatementResult,
+    TrialBalanceResult,
 )
 
 
@@ -43,6 +45,16 @@ class FinanceService:
         self, company: str, fiscal_year=None, from_date=None, to_date=None, periodicity="Yearly"
     ) -> StatementResult:
         return await self.repo.balance_sheet(company, fiscal_year, from_date, to_date, periodicity)
+
+    async def trial_balance(
+        self, company: str, fiscal_year=None, from_date=None, to_date=None
+    ) -> TrialBalanceResult:
+        return await self.repo.trial_balance(company, fiscal_year, from_date, to_date)
+
+    async def cash_flow(
+        self, company=None, fiscal_year=None, from_date=None, to_date=None
+    ) -> CashFlowResult:
+        return await self.repo.cash_flow(company, fiscal_year, from_date, to_date)
 
     async def default_company(self) -> str:
         return await self.repo.default_company()

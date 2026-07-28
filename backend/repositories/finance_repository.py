@@ -11,12 +11,16 @@ from schemas.finance import (
     AgingBuckets,
     BookEntry,
     BookResult,
+    CashFlowLine,
+    CashFlowResult,
     FinanceSummary,
     LedgerResult,
     LedgerRow,
     OutstandingItem,
     StatementLine,
     StatementResult,
+    TrialBalanceResult,
+    TrialBalanceRow,
 )
 from utils.mapping import to_float as _num
 
@@ -278,3 +282,66 @@ class FinanceRepository:
                 continue
             out.setdefault(m.group(0), [0.0] * 12)[month] += _num(e.get("debit")) - _num(e.get("credit"))
         return out
+
+    async def trial_balance(self, company: str, fiscal_year: str | None = None,
+                            from_date: str | None = None, to_date: str | None = None) -> TrialBalanceResult:
+        """Closing debit/credit for every leaf ledger account, from the ERPNext
+        Trial Balance report. Group/total rows are skipped so debits and credits
+        each sum without double-counting."""
+        filters: dict = {"company": company}
+        if fiscal_year:
+            fy = await self.client.get_document("Fiscal Year", fiscal_year)
+            filters.update(fiscal_year=fiscal_year,
+                           from_date=str(fy.get("year_start_date")),
+                           to_date=str(fy.get("year_end_date")))
+        elif from_date and to_date:
+            filters.update(from_date=from_date, to_date=to_date)
+        raw = await self.client.run_report("Trial Balance", filters)
+        result = raw.get("result", []) if isinstance(raw, dict) else (raw or [])
+        rows: list[TrialBalanceRow] = []
+        total_debit = total_credit = 0.0
+        for r in result:
+            if not isinstance(r, dict):
+                continue
+            if r.get("is_group") or not r.get("account"):
+                continue  # skip group subtotals and the grand-total row
+            name = str(r.get("account_name") or r.get("account")).strip()
+            debit = _num(r.get("closing_debit") if r.get("closing_debit") is not None else r.get("debit"))
+            credit = _num(r.get("closing_credit") if r.get("closing_credit") is not None else r.get("credit"))
+            if not debit and not credit:
+                continue
+            rows.append(TrialBalanceRow(account=name, debit=debit, credit=credit))
+            total_debit += debit
+            total_credit += credit
+        return TrialBalanceResult(rows=rows, total_debit=total_debit, total_credit=total_credit)
+
+    async def cash_flow(self, company: str | None = None, fiscal_year: str | None = None,
+                        from_date: str | None = None, to_date: str | None = None) -> CashFlowResult:
+        """Direct-method statement of cash movement over the period: opening cash
+        & bank balance, inflows and outflows grouped by voucher type, and the
+        closing balance. Built straight from the cash and bank ledgers."""
+        if fiscal_year and not (from_date and to_date):
+            fy = await self.client.get_document("Fiscal Year", fiscal_year)
+            from_date, to_date = str(fy.get("year_start_date")), str(fy.get("year_end_date"))
+        cash = await self.cash_book(company, from_date, to_date)
+        bank = await self.bank_book(company, from_date, to_date)
+        inflow: dict[str, float] = {}
+        outflow: dict[str, float] = {}
+        for book in (cash, bank):
+            for e in book.entries:
+                label = e.voucher_type or "Other"
+                if e.debit:
+                    inflow[label] = inflow.get(label, 0.0) + e.debit
+                if e.credit:
+                    outflow[label] = outflow.get(label, 0.0) + e.credit
+        inflows = [CashFlowLine(label=k, amount=v)
+                   for k, v in sorted(inflow.items(), key=lambda kv: -kv[1])]
+        outflows = [CashFlowLine(label=k, amount=v)
+                    for k, v in sorted(outflow.items(), key=lambda kv: -kv[1])]
+        total_in = sum(line.amount for line in inflows)
+        total_out = sum(line.amount for line in outflows)
+        return CashFlowResult(
+            opening=cash.opening + bank.opening, closing=cash.closing + bank.closing,
+            total_in=total_in, total_out=total_out, net_change=total_in - total_out,
+            inflows=inflows, outflows=outflows,
+        )

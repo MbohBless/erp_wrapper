@@ -179,6 +179,12 @@ installation_date, warranty_expiry_date, status }`.
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/finance/summary` | receivables, payables, net position, overdue, outstanding lists (from invoices) |
+| GET | `/finance/receivable` | aged customer ledger (open Sales Invoices, Current/1-30/31-60/61-90/90+ buckets) |
+| GET | `/finance/payable` | aged supplier ledger (open Purchase Invoices, same buckets) |
+| GET | `/finance/cash-book` | cash-account GL movements with running balance; query `company`, `from_date`, `to_date` |
+| GET | `/finance/bank-book` | bank-account GL movements with running balance; same query params |
+| GET | `/finance/trial-balance` | closing debit/credit per leaf account (ERPNext Trial Balance); query `company` (req), `fiscal_year`, `from_date`, `to_date` |
+| GET | `/finance/cash-flow` | direct-method cash movement (opening, inflows/outflows by voucher type, closing) from cash & bank ledgers; query `company`, `fiscal_year`, `from_date`, `to_date` |
 | GET | `/finance/reports/income-statement` | ERPNext P&L; query `company` (req), `fiscal_year`, `from_date`, `to_date`, `periodicity` |
 | GET | `/finance/reports/balance-sheet` | ERPNext Balance Sheet; same query params |
 
@@ -194,7 +200,7 @@ recent_activity[] }` (aggregated from ERPNext invoices, payments and bins).
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/reports/{report_key}/pdf` | Branded, **cryptographically signed (PAdES)** PDF. `report_key` ∈ `receivables`, `payables`, `current-stock`, `low-stock`, `income-statement`, `balance-sheet`. Query (per report): `company` (req. for statements), `fiscal_year`, `from_date`, `to_date`, `warehouse`. Returns `application/pdf` (attachment). |
+| GET | `/reports/{report_key}/pdf` | Branded, **cryptographically signed (PAdES)** PDF. `report_key` ∈ `receivables`, `payables`, `current-stock`, `low-stock`, `income-statement`, `balance-sheet`, `trial-balance`, `cash-flow`, `dashboard`. Query (per report): `company` (req. for statements/trial-balance/cash-flow), `fiscal_year`, `from_date`, `to_date`, `warehouse`. Returns `application/pdf` (attachment). |
 
 Rendering: reportlab letterhead (logo, legal details, signatory block) → signed with
 pyHanko using a self-signed certificate auto-provisioned in `/app/data/signing`

@@ -78,3 +78,34 @@ class StatementLine(BaseModel):
 class StatementResult(BaseModel):
     title: str
     rows: list[StatementLine]
+
+
+# ---- Trial balance (closing debit/credit per leaf account) ----
+class TrialBalanceRow(BaseModel):
+    account: str
+    debit: float = 0
+    credit: float = 0
+
+
+class TrialBalanceResult(BaseModel):
+    title: str = "Trial Balance"
+    rows: list[TrialBalanceRow]
+    total_debit: float = 0
+    total_credit: float = 0
+
+
+# ---- Cash flow statement (direct method, from the cash & bank ledger) ----
+class CashFlowLine(BaseModel):
+    label: str
+    amount: float = 0
+
+
+class CashFlowResult(BaseModel):
+    title: str = "Cash Flow Statement"
+    opening: float = 0
+    closing: float = 0
+    total_in: float = 0
+    total_out: float = 0
+    net_change: float = 0
+    inflows: list[CashFlowLine]
+    outflows: list[CashFlowLine]
