@@ -89,39 +89,3 @@ export const getBalanceSheet = (
   token: string,
   params: { company: string; fiscal_year?: string }
 ) => api.get<StatementResult>(token, "/finance/reports/balance-sheet", params);
-
-// ---- OHADA / SYSCOHADA statutory statements ----
-export type OhadaLine = {
-  code: string;
-  label: string;
-  amount: number;
-  level: number;
-  kind: "header" | "line" | "subtotal" | "total" | "note";
-};
-export type OhadaStatement = {
-  title: string;
-  subtitle: string;
-  currency: string;
-  fiscal_year: string | null;
-  lines: OhadaLine[];
-};
-
-export const getOhadaIncomeStatement = (
-  token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/compte-de-resultat", params);
-
-export const getOhadaBalanceSheet = (
-  token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/bilan", params);
-
-export const getOhadaCashFlow = (
-  token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/flux-de-tresorerie", params);
-
-export const getOhadaEtatAnnexe = (
-  token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/etat-annexe", params);

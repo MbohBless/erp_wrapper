@@ -18,7 +18,6 @@ class CompanyProfileBase(BaseModel):
     currency: str = "XAF"
     signatory_name: str = ""
     signatory_title: str = "Authorized Signatory"
-    ohada_regime: str = "Système Normal"
     accent_color: str = "#416180"
     logo_data_url: str = ""
 

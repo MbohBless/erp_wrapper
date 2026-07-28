@@ -37,8 +37,6 @@ class CompanyProfile(Base):
     signatory_name: Mapped[str] = mapped_column(String(160), default="")
     signatory_title: Mapped[str] = mapped_column(String(160), default="Authorized Signatory")
 
-    # OHADA reporting regime: "Système Normal" or "Système Minimal de Trésorerie".
-    ohada_regime: Mapped[str] = mapped_column(String(40), default="Système Normal")
     accent_color: Mapped[str] = mapped_column(String(9), default="#416180")
     # Optional logo as a data: URI (data:image/png;base64,...). TEXT for size.
     logo_data_url: Mapped[str] = mapped_column(Text, default="")

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import DocFormShell, { DOC_FIELD, DOC_GRID, DOC_LABEL } from "@/components/ui/DocFormShell";
+import { groupNum } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -28,7 +29,7 @@ type FormState = {
 };
 
 const num = (s: string): number | null => {
-  const n = parseFloat(s);
+  const n = parseFloat(s.replace(/[^\d.-]/g, ""));
   return s.trim() === "" || Number.isNaN(n) ? null : n;
 };
 
@@ -48,8 +49,8 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
     unit: initial?.unit ?? "Nos",
     manufacturer: initial?.manufacturer ?? "",
     barcode: initial?.barcode ?? "",
-    purchase_price: initial?.purchase_price?.toString() ?? "",
-    selling_price: initial?.selling_price?.toString() ?? "",
+    purchase_price: initial?.purchase_price != null ? groupNum(String(initial.purchase_price)) : "",
+    selling_price: initial?.selling_price != null ? groupNum(String(initial.selling_price)) : "",
     image: initial?.image ?? "",
     disabled: initial?.disabled ?? false,
   });
@@ -131,11 +132,9 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             <label className={DOC_LABEL}>{t("products.sellingPriceXaf")}</label>
             <input
               className={DOC_FIELD}
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="numeric"
               value={form.selling_price}
-              onChange={(e) => set("selling_price", e.target.value)}
+              onChange={(e) => set("selling_price", groupNum(e.target.value))}
             />
           </div>
         </div>
@@ -151,11 +150,9 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             <label className={DOC_LABEL}>{t("products.purchasePriceXaf")}</label>
             <input
               className={DOC_FIELD}
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="numeric"
               value={form.purchase_price}
-              onChange={(e) => set("purchase_price", e.target.value)}
+              onChange={(e) => set("purchase_price", groupNum(e.target.value))}
             />
           </div>
           <div>

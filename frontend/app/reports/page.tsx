@@ -8,21 +8,16 @@ import { Icon } from "@/components/icons";
 import { xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
-  type OhadaStatement,
   type StatementResult,
   getBalanceSheet,
   getFinanceSummary,
   getIncomeStatement,
-  getOhadaBalanceSheet,
-  getOhadaCashFlow,
-  getOhadaEtatAnnexe,
-  getOhadaIncomeStatement,
 } from "@/lib/finance";
 import { useI18n } from "@/lib/i18n";
 import { listStock, listWarehouses } from "@/lib/inventory";
 import { type ReportKey, type ReportParams, downloadReportPdf } from "@/lib/reports";
 
-type NeedKind = "statement" | "ohada" | "stock" | "outstanding";
+type NeedKind = "statement" | "stock" | "outstanding";
 type ReportDef = {
   key: ReportKey;
   title: string;
@@ -32,15 +27,6 @@ type ReportDef = {
 };
 
 const GROUPS: { gid: string; items: ReportDef[] }[] = [
-  {
-    gid: "ohada",
-    items: [
-      { key: "compte-de-resultat", title: "Compte de Résultat", desc: "OHADA · résultat par nature (SIG).", icon: "finance", kind: "ohada" },
-      { key: "bilan", title: "Bilan", desc: "OHADA · Actif / Passif (Système Normal).", icon: "finance", kind: "ohada" },
-      { key: "flux-de-tresorerie", title: "Tableau des Flux", desc: "OHADA · flux de trésorerie (méthode directe).", icon: "finance", kind: "ohada" },
-      { key: "etat-annexe", title: "État Annexé", desc: "OHADA · notes annexes.", icon: "reports", kind: "ohada" },
-    ],
-  },
   {
     gid: "financial",
     items: [
@@ -71,7 +57,7 @@ export default function ReportsPage() {
 function ReportsContent() {
   const { token } = useAuth();
   const { t } = useI18n();
-  const [selected, setSelected] = useState<ReportKey>("compte-de-resultat");
+  const [selected, setSelected] = useState<ReportKey>("income-statement");
   const [company, setCompany] = useState("EquiMed");
   const [fiscalYear, setFiscalYear] = useState(String(new Date().getFullYear()));
   const [warehouse, setWarehouse] = useState("");
@@ -80,7 +66,7 @@ function ReportsContent() {
   const def = ALL.find((r) => r.key === selected) as ReportDef;
 
   const params: ReportParams = useMemo(() => {
-    if (def.kind === "statement" || def.kind === "ohada")
+    if (def.kind === "statement")
       return { company, fiscal_year: fiscalYear || undefined };
     if (def.kind === "stock") return { warehouse: warehouse || undefined };
     return {};
@@ -155,7 +141,7 @@ function ReportsContent() {
           </div>
 
           {/* Params */}
-          {(def.kind === "statement" || def.kind === "ohada") && (
+          {def.kind === "statement" && (
             <div className="px-6 pt-5 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
               <Field label={t("reports.company")}>
                 <input className={FIELD} value={company} onChange={(e) => setCompany(e.target.value)} placeholder="EquiMed" />
@@ -181,7 +167,6 @@ function ReportsContent() {
             {token && def.kind === "outstanding" && <OutstandingPreview token={token} kind={selected as "receivables" | "payables"} />}
             {token && def.kind === "stock" && <StockPreview token={token} lowOnly={selected === "low-stock"} warehouse={warehouse} />}
             {token && def.kind === "statement" && <StatementPreview token={token} kind={selected as "income-statement" | "balance-sheet"} company={company} fiscalYear={fiscalYear} />}
-            {token && def.kind === "ohada" && <OhadaPreview token={token} statementKey={selected as OhadaKey} company={company} fiscalYear={fiscalYear} />}
           </div>
         </div>
       </div>
@@ -249,62 +234,6 @@ function StockPreview({ token, lowOnly, warehouse }: { token: string; lowOnly: b
       rows={rows.map((s) => [s.item_code, s.warehouse, String(s.actual_qty)])}
       emphasizeRight={lowOnly}
     />
-  );
-}
-
-const OHADA_FETCHERS = {
-  "compte-de-resultat": getOhadaIncomeStatement,
-  bilan: getOhadaBalanceSheet,
-  "flux-de-tresorerie": getOhadaCashFlow,
-  "etat-annexe": getOhadaEtatAnnexe,
-};
-type OhadaKey = keyof typeof OHADA_FETCHERS;
-
-function OhadaPreview({ token, statementKey, company, fiscalYear }: { token: string; statementKey: OhadaKey; company: string; fiscalYear: string }) {
-  const { t } = useI18n();
-  const [result, setResult] = useState<OhadaStatement | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const run = useMutation({
-    mutationFn: () => OHADA_FETCHERS[statementKey](token, { company, fiscal_year: fiscalYear || undefined }),
-    onSuccess: (r) => { setError(null); setResult(r); },
-    onError: (e) => setError(e instanceof Error ? e.message : "Failed"),
-  });
-
-  return (
-    <div>
-      <button type="button" onClick={() => run.mutate()} disabled={run.isPending || !company} className="btn btn-outlined mb-4">
-        {run.isPending ? t("reports.generating") : result ? t("reports.refreshPreview") : t("reports.loadPreview")}
-      </button>
-      {error && <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2.5 rounded-xl text-[13px] mb-3">{error}</div>}
-      {!result ? (
-        <Muted text={t("reports.statementPrompt")} />
-      ) : (
-        <table className="w-full text-sm border-collapse">
-          <tbody>
-            {result.lines.map((l, i) => {
-              if (l.kind === "header") {
-                return (
-                  <tr key={i}>
-                    <td colSpan={2} className="pt-4 pb-1 text-[11px] tracking-[0.1em] uppercase muted-2 font-heading font-semibold">{l.label}</td>
-                  </tr>
-                );
-              }
-              const strong = l.kind === "subtotal" || l.kind === "total";
-              const isNote = l.kind === "note";
-              return (
-                <tr key={i} className={`border-b border-solid divide-soft ${l.kind === "total" ? "border-t-2 border-t-accent" : ""}`}>
-                  <td className={`py-1.5 pr-3 ${strong ? "font-semibold" : ""} ${isNote ? "muted text-[13px]" : ""}`} style={{ paddingLeft: l.level * 16 }}>
-                    {l.code && <span className="muted-3 num text-[11px] mr-2">{l.code}</span>}
-                    {l.label}
-                  </td>
-                  <td className={`py-1.5 text-right num tabular-nums ${strong ? "font-semibold" : ""}`}>{isNote ? "" : xaf(l.amount)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
   );
 }
 

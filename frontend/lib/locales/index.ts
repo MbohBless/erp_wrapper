@@ -11,11 +11,12 @@ import { products } from "./products";
 import { purchases } from "./purchases";
 import { reports } from "./reports";
 import { sales } from "./sales";
+import { status } from "./status";
 import { suppliers } from "./suppliers";
 
 const FRAGMENTS = [
   common, reports, dashboard, finance, sales, purchases, products,
-  inventory, equipment, maintenance, customers, suppliers,
+  inventory, equipment, maintenance, customers, suppliers, status,
 ];
 
 export const DICT = {

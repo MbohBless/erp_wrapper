@@ -29,12 +29,25 @@ export const getDashboard = (token: string) =>
 // ---- Formatting helpers ----
 
 // XAF (Central African CFA franc) — Cameroon's currency, no minor units.
-const xafFmt = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "XAF",
-  maximumFractionDigits: 0,
-});
-export const xaf = (n: number) => xafFmt.format(n || 0);
+// Grouped with commas for readability, e.g. "3,423,250 FCFA".
+const groupFmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+export const xaf = (n: number) => `${groupFmt.format(Math.round(n || 0))} FCFA`;
+
+/** Parse a user-typed money string (with commas/currency) to a number. */
+export const parseNum = (v: string | number): number => {
+  if (typeof v === "number") return v;
+  const n = parseFloat(String(v).replace(/[^\d.-]/g, ""));
+  return Number.isNaN(n) ? 0 : n;
+};
+
+/** Group an input's digits with commas as the user types, e.g. "3500000" → "3,500,000". */
+export const groupNum = (v: string): string => {
+  const s = String(v);
+  const neg = s.trim().startsWith("-");
+  const digits = s.replace(/[^\d]/g, "");
+  if (!digits) return neg ? "-" : "";
+  return (neg ? "-" : "") + groupFmt.format(Number(digits));
+};
 
 // Compact figures the way the EquiMed design shows them: "28.4M", "840K".
 export function compact(n: number): string {

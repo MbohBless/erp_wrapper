@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import { Icon } from "@/components/icons";
-import { xaf } from "@/lib/api";
+import { groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { listCustomers } from "@/lib/customers";
@@ -55,13 +55,13 @@ function NewInvoiceForm() {
 
   function pickItem(i: number, sku: string) {
     const p = products.find((x) => x.id === sku);
-    setRow(i, { item_code: sku, rate: p?.selling_price != null ? String(p.selling_price) : "" });
+    setRow(i, { item_code: sku, rate: p?.selling_price != null ? groupNum(String(p.selling_price)) : "" });
   }
 
   const totals = useMemo(() => {
     let qty = 0, amount = 0;
     for (const r of rows) {
-      const q = parseFloat(r.qty) || 0, rt = parseFloat(r.rate) || 0;
+      const q = parseFloat(r.qty) || 0, rt = parseNum(r.rate) || 0;
       qty += q; amount += q * rt;
     }
     return { qty, amount };
@@ -81,7 +81,7 @@ function NewInvoiceForm() {
           .map((r) => ({
             item_code: r.item_code.trim(),
             qty: parseFloat(r.qty) || 0,
-            rate: parseFloat(r.rate) || 0,
+            rate: parseNum(r.rate) || 0,
             description: r.description || null,
           })),
       };
@@ -187,7 +187,7 @@ function NewInvoiceForm() {
                 </thead>
                 <tbody>
                   {rows.map((r, i) => {
-                    const amount = (parseFloat(r.qty) || 0) * (parseFloat(r.rate) || 0);
+                    const amount = (parseFloat(r.qty) || 0) * (parseNum(r.rate) || 0);
                     return (
                       <tr key={i} className="border-t border-divider">
                         <td className="px-3 py-2 muted text-center">{i + 1}</td>
@@ -201,7 +201,7 @@ function NewInvoiceForm() {
                           <input className={`${CELL} text-right`} type="number" min="0" step="any" value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value })} />
                         </td>
                         <td className="px-2 py-2">
-                          <input className={`${CELL} text-right`} type="number" min="0" step="any" value={r.rate} onChange={(e) => setRow(i, { rate: e.target.value })} />
+                          <input className={`${CELL} text-right`} inputMode="numeric" value={r.rate} onChange={(e) => setRow(i, { rate: groupNum(e.target.value) })} />
                         </td>
                         <td className="px-3 py-2 text-right font-medium num">{xaf(amount)}</td>
                         <td className="px-2 py-2 text-center">

@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AppShell from "@/components/AppShell";
 import DocFormShell, { DOC_FIELD, DOC_LABEL } from "@/components/ui/DocFormShell";
 import { Icon } from "@/components/icons";
-import { xaf } from "@/lib/api";
+import { groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { listProducts } from "@/lib/products";
@@ -60,7 +60,7 @@ function StockEntryForm() {
 
   function pickItem(i: number, sku: string) {
     const p = products.find((x) => x.id === sku);
-    setRow(i, { item_code: sku, rate: receiving && p?.purchase_price != null ? String(p.purchase_price) : rows[i].rate });
+    setRow(i, { item_code: sku, rate: receiving && p?.purchase_price != null ? groupNum(String(p.purchase_price)) : rows[i].rate });
   }
 
   const totalQty = useMemo(
@@ -78,7 +78,7 @@ function StockEntryForm() {
             item_code: r.item_code.trim(),
             qty: parseFloat(r.qty) || 0,
             batch_no: r.batch_no || null,
-            rate: receiving && r.rate ? parseFloat(r.rate) : null,
+            rate: receiving && r.rate ? parseNum(r.rate) : null,
           })),
       };
       return receiving ? receiveGoods(token as string, input) : issueGoods(token as string, input);
@@ -171,7 +171,7 @@ function StockEntryForm() {
                       </td>
                       {receiving && (
                         <td className="px-2 py-2">
-                          <input className={`${CELL} text-right`} type="number" min="0" step="any" value={r.rate} onChange={(e) => setRow(i, { rate: e.target.value })} />
+                          <input className={`${CELL} text-right`} inputMode="numeric" value={r.rate} onChange={(e) => setRow(i, { rate: groupNum(e.target.value) })} />
                         </td>
                       )}
                       <td className="px-2 py-2 text-center">

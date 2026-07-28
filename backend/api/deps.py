@@ -127,6 +127,7 @@ def get_report_service(
         finance=FinanceService(FinanceRepository(client)),
         inventory=_build_inventory_service(client),
         profile=profile,
+        dashboard=DashboardService(DashboardRepository(client)),
     )
 
 

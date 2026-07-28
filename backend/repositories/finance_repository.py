@@ -177,18 +177,6 @@ class FinanceRepository:
         accounts = await self._accounts("Bank", company, name_likes=("%Banque%", "%Bank%"))
         return await self._book(accounts, from_date, to_date)
 
-    async def treasury_book(self, company: str | None, fiscal_year: str | None = None,
-                            from_date=None, to_date=None) -> BookResult:
-        """Combined cash + bank (trésorerie) ledger — feeds the OHADA cash-flow."""
-        if fiscal_year:
-            fy = await self.client.get_document("Fiscal Year", fiscal_year)
-            from_date = str(fy.get("year_start_date"))
-            to_date = str(fy.get("year_end_date"))
-        cash = await self._accounts("Cash", company, name_likes=("%Caisse en%", "%Cash on Hand%", "%Petty Cash%"))
-        bank = await self._accounts("Bank", company, name_likes=("%Banque%", "%Bank%"))
-        accounts = list(dict.fromkeys([*cash, *bank]))
-        return await self._book(accounts, from_date, to_date)
-
     # ----------------------------------------------- financial statements
     async def _statement(self, report: str, title: str, company: str,
                          fiscal_year: str | None, from_date: str | None,
@@ -233,14 +221,15 @@ class FinanceRepository:
         return await self._statement("Balance Sheet", "Balance Sheet",
                                      company, fiscal_year, from_date, to_date, periodicity)
 
-    # ------------------------------------------- SYSCOHADA trial balance
-    async def trial_balance(self, company: str, fiscal_year: str | None = None,
-                            from_date: str | None = None, to_date: str | None = None) -> list[dict]:
-        """Per-account closing balances (leaf accounts) for OHADA statements.
+    # ------------------------------------------- trial balance & company
+    async def default_company(self) -> str:
+        rows = await self.client.list_documents("Company", fields=["name"], limit=1)
+        return rows[0]["name"] if rows else ""
 
-        Returns [{number, name, debit, credit}, ...] where number is the leading
-        SYSCOHADA account number and debit/credit are the period closing values.
-        """
+    async def account_balances(self, company: str, fiscal_year: str | None = None,
+                               from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+        """Per-account closing balances (leaf accounts) for the period, from the
+        ERPNext Trial Balance. Returns [{number, debit, credit}, ...]."""
         filters: dict = {"company": company}
         if fiscal_year:
             fy = await self.client.get_document("Fiscal Year", fiscal_year)
@@ -257,12 +246,35 @@ class FinanceRepository:
                 continue
             name = str(r.get("account_name") or r.get("account") or "").strip()
             m = re.match(r"\d+", name)
-            if not m:  # skips 'Total' and any non-numbered rows
+            if not m:
                 continue
             debit = r.get("closing_debit")
             credit = r.get("closing_credit")
             if debit is None and credit is None:
                 debit, credit = r.get("debit"), r.get("credit")
-            out.append({"number": m.group(0), "name": name,
-                        "debit": _num(debit), "credit": _num(credit)})
+            out.append({"number": m.group(0), "debit": _num(debit), "credit": _num(credit)})
+        return out
+
+    async def account_monthly(self, company: str, fiscal_year: str) -> dict[str, list[float]]:
+        """Per-account net movement (debit − credit) for each of the 12 months of
+        the fiscal year. Returns {account_number: [m1..m12]}."""
+        fy = await self.client.get_document("Fiscal Year", fiscal_year)
+        start, end = str(fy.get("year_start_date")), str(fy.get("year_end_date"))
+        gl = await self.client.list_documents(
+            "GL Entry",
+            fields=["account", "posting_date", "debit", "credit"],
+            filters=[["company", "=", company], ["is_cancelled", "=", 0],
+                     ["posting_date", ">=", start], ["posting_date", "<=", end]],
+            limit=100000,
+        )
+        out: dict[str, list[float]] = {}
+        for e in gl:
+            m = re.match(r"\d+", str(e.get("account") or ""))
+            pd = str(e.get("posting_date") or "")
+            if not m or len(pd) < 7:
+                continue
+            month = int(pd[5:7]) - 1
+            if not 0 <= month <= 11:
+                continue
+            out.setdefault(m.group(0), [0.0] * 12)[month] += _num(e.get("debit")) - _num(e.get("credit"))
         return out

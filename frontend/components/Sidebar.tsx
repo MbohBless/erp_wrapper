@@ -17,6 +17,7 @@ const ROUTES: Record<string, string> = {
   equipment: "/equipment",
   maintenance: "/maintenance",
   finance: "/finance",
+  budget: "/budget",
   reports: "/reports",
   settings: "/settings",
 };
@@ -50,6 +51,7 @@ const GROUPS: { label: string; items: { key: string; label: string }[] }[] = [
     label: "Business",
     items: [
       { key: "finance", label: "Finance" },
+      { key: "budget", label: "Budget" },
       { key: "reports", label: "Reports" },
       { key: "settings", label: "Settings" },
     ],

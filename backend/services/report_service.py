@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
+from services.dashboard_service import DashboardService
 from services.finance_service import FinanceService
 from services.inventory_service import InventoryService
 from utils.pdf_report import Column, ReportDoc, render_report_pdf
@@ -23,13 +24,8 @@ REPORT_TITLES = {
     "low-stock": "Low Stock",
     "income-statement": "Income Statement",
     "balance-sheet": "Balance Sheet",
-    "compte-de-resultat": "Compte de Résultat (OHADA)",
-    "bilan": "Bilan (OHADA)",
-    "flux-de-tresorerie": "Tableau des Flux de Trésorerie (OHADA)",
-    "etat-annexe": "État Annexé (OHADA)",
+    "dashboard": "Dashboard Summary",
 }
-
-_OHADA_KEYS = ("compte-de-resultat", "bilan", "flux-de-tresorerie", "etat-annexe")
 
 
 def _money(value: float, currency: str) -> str:
@@ -47,9 +43,11 @@ class ReportService:
         finance: FinanceService,
         inventory: InventoryService,
         profile: dict,
+        dashboard: DashboardService | None = None,
     ) -> None:
         self.finance = finance
         self.inventory = inventory
+        self.dashboard = dashboard
         self.profile = profile
         self.currency = profile.get("currency") or "XAF"
 
@@ -71,14 +69,14 @@ class ReportService:
         if generated_by:
             base_meta.append(("By", generated_by))
 
-        if key in ("receivables", "payables"):
+        if key == "dashboard":
+            doc = await self._dashboard(base_meta)
+        elif key in ("receivables", "payables"):
             doc = await self._outstanding(key, base_meta)
         elif key in ("current-stock", "low-stock"):
             doc = await self._stock(key, warehouse, base_meta)
         elif key in ("income-statement", "balance-sheet"):
             doc = await self._statement(key, company, fiscal_year, from_date, to_date, base_meta)
-        elif key in _OHADA_KEYS:
-            doc = await self._ohada(key, company, fiscal_year, from_date, to_date, base_meta)
         else:
             raise HTTPException(status_code=404, detail=f"Unknown report '{key}'")
 
@@ -103,6 +101,35 @@ class ReportService:
         return filename, signed
 
     # ---- builders -------------------------------------------------------
+    async def _dashboard(self, base_meta) -> ReportDoc:
+        if self.dashboard is None:
+            raise HTTPException(status_code=500, detail="Dashboard data is unavailable.")
+        s = await self.dashboard.get_summary()
+        cur = self.currency
+        rows: list[list[str]] = [
+            ["Revenue today", _money(s.revenue_today, cur)],
+            ["Outstanding — customers", _money(s.outstanding_customers, cur)],
+            ["Outstanding — suppliers", _money(s.outstanding_suppliers, cur)],
+            ["Inventory value", _money(s.inventory_value, cur)],
+            ["Low-stock items", str(s.low_stock_count)],
+        ]
+        bold: set[int] = set()
+        if s.recent_activity:
+            rows.append(["Recent activity", ""])
+            bold.add(len(rows) - 1)
+            for a in s.recent_activity[:12]:
+                label = f"{a.type} {a.reference}" + (f" · {a.party}" if a.party else "")
+                rows.append([label, _money(a.amount, cur)])
+        return ReportDoc(
+            title=REPORT_TITLES["dashboard"],
+            subtitle="Key figures as at the generation date.",
+            meta=base_meta,
+            columns=[Column("Item", width=4.2), Column("Amount", align="right", width=1.8)],
+            rows=rows,
+            bold_rows=bold,
+            footnote="Aggregated from ERPNext invoices, payments and stock at generation time.",
+        )
+
     async def _outstanding(self, key: str, base_meta) -> ReportDoc:
         summary = await self.finance.get_summary()
         if key == "receivables":
@@ -155,50 +182,6 @@ class ReportService:
             footnote="Source: ERPNext Bin (actual quantity).",
         )
 
-    async def _ohada(self, key, company, fiscal_year, from_date, to_date, base_meta) -> ReportDoc:
-        if not company:
-            raise HTTPException(status_code=422, detail="`company` is required for this report.")
-        regime = self.profile.get("ohada_regime") or "Système Normal"
-        fn = {
-            "compte-de-resultat": self.finance.ohada_income_statement,
-            "bilan": self.finance.ohada_balance_sheet,
-            "flux-de-tresorerie": self.finance.ohada_cash_flow,
-            "etat-annexe": self.finance.ohada_etat_annexe,
-        }[key]
-        if key in ("compte-de-resultat", "bilan"):
-            stmt = await fn(company, fiscal_year, from_date, to_date, regime)
-        else:
-            stmt = await fn(company, fiscal_year, from_date, to_date)
-        meta = list(base_meta)
-        meta.append(("Entité", company))
-        if key in ("compte-de-resultat", "bilan"):
-            meta.append(("Régime", regime))
-        if fiscal_year:
-            meta.append(("Exercice", fiscal_year))
-        elif from_date or to_date:
-            meta.append(("Période", f"{from_date or '…'} → {to_date or '…'}"))
-        rows: list[list[str]] = []
-        indents: list[int] = []
-        bold: set[int] = set()
-        for i, ln in enumerate(stmt.lines):
-            label = (f"{ln.code}  " if ln.code else "") + ln.label
-            amount = "" if ln.kind in ("header", "note") else _money(ln.amount, self.currency)
-            rows.append([label, amount])
-            indents.append(ln.level)
-            if ln.kind in ("header", "subtotal", "total"):
-                bold.add(i)
-        return ReportDoc(
-            title=stmt.title,
-            subtitle=stmt.subtitle,
-            meta=meta,
-            columns=[Column("Libellé", width=4.6), Column("Montant (XAF)", align="right", width=1.6)],
-            rows=rows,
-            indents=indents,
-            bold_rows=bold,
-            footnote="Présentation OHADA · Système Normal, lignes principales, établie à partir "
-            "de la balance SYSCOHADA (les reclassements par solde sont simplifiés).",
-        )
-
     async def _statement(self, key, company, fiscal_year, from_date, to_date, base_meta) -> ReportDoc:
         if not company:
             raise HTTPException(status_code=422, detail="`company` is required for this report.")
@@ -215,7 +198,7 @@ class ReportService:
         bold_rows = {i for i, r in enumerate(result.rows) if r.is_total}
         return ReportDoc(
             title=result.title or REPORT_TITLES[key],
-            subtitle="Prepared from the ERPNext general ledger (SYSCOHADA).",
+            subtitle="Prepared from the ERPNext general ledger.",
             meta=meta,
             columns=[Column("Account", width=4.2), Column("Amount", align="right", width=1.8)],
             rows=rows,

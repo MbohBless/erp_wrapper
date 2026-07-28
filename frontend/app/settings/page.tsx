@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
+import { ActiveTag } from "@/components/ui/StatusTag";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import CompanyBrandingSection from "@/components/settings/CompanyBrandingSection";
 import UserDialog, { type UserFormValue } from "@/components/settings/UserDialog";
@@ -70,6 +71,17 @@ function SettingsContent() {
 
         {/* Company & branding (report letterhead) */}
         {token && <CompanyBrandingSection token={token} canEdit={canBrand} />}
+
+        {/* Books setup */}
+        <Section title="Books setup" note="Opening balances">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="text-sm muted max-w-lg">
+              Set your starting financial position — bank & cash, open invoices and bills, stock,
+              equipment and loans — as of your start date. EquiMed posts it to the ledger once.
+            </div>
+            <a href="/setup" className="btn btn-outlined shrink-0">Open setup wizard</a>
+          </div>
+        </Section>
 
         {/* Regional */}
         <Section title={t("settings.regional")} note="ERPNext">
@@ -176,9 +188,7 @@ function UsersSection({ token, meId }: { token: string; meId?: number }) {
                   <td className="py-3 muted">{u.email}</td>
                   <td className="py-3 muted">{u.role}</td>
                   <td className="py-3">
-                    <span className={`inline-flex items-center text-[11px] px-2.5 py-0.5 rounded-full ${u.is_active ? "bg-[color-mix(in_srgb,var(--ok-raw)_15%,transparent)] text-ok" : "bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] muted"}`}>
-                      {u.is_active ? "Active" : "Disabled"}
-                    </span>
+                    <ActiveTag disabled={!u.is_active} />
                   </td>
                   <td className="py-3 pr-4">
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

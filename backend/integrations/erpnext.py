@@ -248,6 +248,64 @@ async def create_purchase(
     return doc
 
 
+async def create_journal_entry(
+    client: ERPNextClient,
+    *,
+    company: str,
+    posting_date: str,
+    accounts: list[dict],
+    remark: str,
+    is_opening: bool = False,
+) -> dict:
+    """Create + submit a Journal Entry. `accounts`: rows with account/debit/credit."""
+    payload: dict[str, Any] = {
+        "company": company,
+        "posting_date": posting_date,
+        "voucher_type": "Journal Entry",
+        "user_remark": remark,
+        "accounts": accounts,
+    }
+    if is_opening:
+        payload["is_opening"] = "Yes"
+    doc = await client.create_document("Journal Entry", payload)
+    return await client.submit_document("Journal Entry", doc["name"])
+
+
+async def create_opening_invoice(
+    client: ERPNextClient,
+    *,
+    doctype: str,          # "Sales Invoice" | "Purchase Invoice"
+    company: str,
+    party: str,
+    posting_date: str,
+    due_date: str,
+    amount: float,
+    item_code: str,
+    offset_account: str,   # balance-sheet account the opening balance offsets to
+    bill_no: str | None = None,
+) -> dict:
+    """Create + submit an *opening* invoice (is_opening) so a pre-existing debt
+    shows in the AR/AP ledger and can be paid off. Posts party ⇄ offset_account.
+    """
+    is_sales = doctype == "Sales Invoice"
+    line: dict[str, Any] = {"item_code": item_code, "qty": 1, "rate": amount}
+    line["income_account" if is_sales else "expense_account"] = offset_account
+    payload: dict[str, Any] = {
+        "company": company,
+        "posting_date": posting_date,
+        "set_posting_time": 1,
+        "due_date": due_date,
+        "is_opening": "Yes",
+        "update_stock": 0,
+        "items": [line],
+    }
+    payload["customer" if is_sales else "supplier"] = party
+    if bill_no and not is_sales:
+        payload["bill_no"] = bill_no
+    doc = await client.create_document(doctype, payload)
+    return await client.submit_document(doctype, doc["name"])
+
+
 def _financial_filters(
     company: str,
     fiscal_year: str | None,
