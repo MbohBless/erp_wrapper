@@ -8,7 +8,7 @@ record for accounting, stock and master data.
 
 ```
                  ┌────────────┐
- Browser ──HTTP──▶   Caddy    │  (reverse proxy, :80)
+ Browser ──HTTP──▶   Caddy    │  (reverse proxy, :80/:443)
                  └─────┬──────┘
         /              │ /api/*                 erp.localhost
         ▼              ▼                              ▼
@@ -20,7 +20,7 @@ record for accounting, stock and master data.
                        ▼                               ▼
                  ┌───────────┐                   ┌──────────┐   ┌────────┐
                  │  SQLite   │                   │ MariaDB  │   │ Redis  │
-                 │(app auth) │                   │(ERPNext) │   │ cache+ │
+                 │(app-owned)│                   │(ERPNext) │   │ cache+ │
                  └───────────┘                   └──────────┘   │ queue  │
                                                                 └────────┘
 ```
@@ -28,15 +28,40 @@ record for accounting, stock and master data.
 **Golden rule:** the frontend never talks to ERPNext directly — only FastAPI
 does, and only through one module.
 
+On the shared SaaS plane (`TENANCY_MODE=multi`, `--profile saas`) the same
+services are joined by a control plane on its own hostname:
+
+```
+  console.<domain>          <tenant>.<domain>  /  customer's own domain
+        │                              │
+        ▼                              ▼
+  ┌───────────┐               ┌────────────────┐
+  │ platform  │               │ frontend +     │  tenant resolved from Host
+  │    UI     │               │ backend        │──┐
+  └─────┬─────┘               └───────┬────────┘  │ ERPNext site per tenant
+        │ /papi                       │           ▼
+  ┌─────▼──────┐   resolve(host)      │      ┌──────────┐
+  │ platform   │◀─────────────────────┘      │  Frappe  │
+  │    API     │   bootstrap/purge           │  bench   │
+  └─────┬──────┘─────────────────────▶       │(N sites) │
+        ▼                                    └──────────┘
+  ┌───────────┐
+  │  SQLite   │  tenant registry, plans, operators, audit
+  └───────────┘
+```
+
 ## Data ownership
 
 | Concern | Store | Owner |
 | --- | --- | --- |
 | App users, roles, password hashes, JWT auth | SQLite (`backend-data` volume) | FastAPI |
+| Company profile, branding, dashboard layout, budgets, books-setup state | SQLite (same) | FastAPI |
 | Customers, suppliers, products, stock, invoices, equipment, GL | MariaDB | ERPNext |
+| Tenant registry, plans, platform operators, audit log | SQLite (`platform-data` volume) | Control plane |
 
-The two never share a database. FastAPI reads/writes ERPNext business data over
-its REST API.
+They never share a database. FastAPI reads/writes ERPNext business data over its
+REST API. Every app-owned table carries a `tenant_id`; ERPNext isolation is at
+the site/database level.
 
 ## Backend layers (`backend/`)
 
@@ -45,10 +70,13 @@ A strict layered architecture (enforced by `docs/coding_guidelines.md`):
 ```
 api/            Thin FastAPI routers — no business logic, just DI + RBAC + I/O
 services/       Business logic (validation, orchestration, 404/409 mapping)
-repositories/   Data access (repository pattern) — DB (users) or ERPNext (rest)
-integrations/   erpnext.py — the ONLY module that talks to ERPNext
+repositories/   Data access (repository pattern) — DB (app-owned) or ERPNext
+integrations/   The ONLY modules allowed to make outbound HTTP calls:
+                  erpnext.py       — the only module that talks to ERPNext
+                  control_plane.py — tenant resolution (multi-tenant mode only)
 schemas/        Pydantic v2 request/response models
-models/         SQLAlchemy ORM models (users)
+models/         SQLAlchemy ORM models (users, company profile, branding, budget)
+tenancy/        Cross-cutting: tenant context, resolution, request binding
 utils/          security (JWT/bcrypt), mapping (domain↔ERPNext helpers)
 config.py       Pydantic settings   main.py  app factory + router wiring
 ```
@@ -83,8 +111,35 @@ config.py       Pydantic settings   main.py  app factory + router wiring
 
 - JWT (HS256) issued by FastAPI; bcrypt password hashing.
 - 6 roles; `require_roles(...)` dependency guards each route; **Administrator is
-  always allowed**. An initial admin is seeded on first boot.
+  always allowed**. An initial admin is seeded on first boot (single-tenant only).
+- Tokens carry a `tid` (tenant) claim, checked against the request's resolved
+  tenant — see [multi-tenancy.md](multi-tenancy.md).
+- `require_feature(...)` additionally gates routes on the tenant's plan, returning
+  **402** rather than 403 so "your plan cannot" is distinguishable from "you cannot".
 - See [api.md](api.md) for per-endpoint view/manage matrices.
+
+## Tenancy
+
+The same codebase ships as a **self-hosted single-tenant** product and as a
+**shared SaaS plane**, selected by `TENANCY_MODE`. A cross-cutting `tenancy/`
+package sits beside the layering (like `utils/`):
+
+```
+tenancy/context.py     TenantContext + the single ContextVar accessor
+tenancy/resolver.py    StaticTenantResolver (single) | ControlPlaneResolver (multi)
+tenancy/middleware.py  Binds a tenant to every request before CORS/auth/DB
+```
+
+`get_erpnext_client()` builds its client from the *request's* tenant rather than
+from global settings — that one function is what makes every ERPNext-backed
+service multi-tenant. App-owned tables carry `tenant_id` (`models/mixins.py`)
+and their repositories are constructed per tenant.
+
+On the SaaS plane a separate **control plane** service (`platform/`) owns the
+tenant registry, plans, provisioning and suspension. It has its own database and
+its own signing key, and the tenant app reaches it only through
+`integrations/control_plane.py`. Full design, threat model and operational
+risks: **[multi-tenancy.md](multi-tenancy.md)**.
 
 ## Frontend (`frontend/`)
 
@@ -107,8 +162,17 @@ MariaDB · Redis · Caddy · Docker Compose.
 
 ## Testing
 
-`backend/tests/` — 14 pytest modules, 105 tests. ERPNext is replaced by an
+`backend/tests/` — 16 pytest modules, 150 tests. ERPNext is replaced by an
 in-memory `FakeERPNextClient` (dependency-overridden), and the app-auth DB uses
 a temp SQLite; the suite covers CRUD, RBAC, domain actions (install, complete,
 receive/issue), search/filter, and the integration wrappers — no live ERPNext
-needed. The frontend is verified via `next build`.
+needed.
+
+`tests/test_tenancy.py` and `tests/test_branding.py` are the isolation and
+input-validation suites: cross-tenant token replay, per-tenant data scoping,
+suspension enforcement, and the CSS-injection payloads branding must reject.
+
+`platform/api/tests/` — 34 tests covering the tenant lifecycle, operator RBAC,
+secret encryption at rest and TLS authorisation.
+
+Both frontends are verified via `next build`.

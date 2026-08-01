@@ -8,6 +8,8 @@ import Blueprint from "@/components/Blueprint";
 import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
+import { useCompanyName } from "@/lib/company";
 import {
   type BookResult,
   type CashFlowResult,
@@ -56,6 +58,7 @@ export default function FinancePage() {
 }
 
 function FinanceContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("summary");
@@ -63,7 +66,7 @@ function FinanceContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("finance.title")}</span>
       </nav>
@@ -290,7 +293,11 @@ function BookTab({ token, kind, onAuthError }: { token: string | null; kind: "ca
 
 // --------------------------------------------------------- Trial balance
 function useCompanyYear() {
-  const [company, setCompany] = useState("EquiMed");
+  const defaultCompany = useCompanyName();
+  const [company, setCompany] = useState("");
+  useEffect(() => {
+    setCompany((c) => c || defaultCompany);
+  }, [defaultCompany]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   return { company, setCompany, year, setYear };
 }
@@ -475,7 +482,11 @@ function CfRow({ label, value, bold, indent, muted, valueClass }: {
 function StatementsTab({ token }: { token: string | null }) {
   const { t } = useI18n();
   const [which, setWhich] = useState<"income-statement" | "balance-sheet">("income-statement");
-  const [company, setCompany] = useState("EquiMed");
+  const defaultCompany = useCompanyName();
+  const [company, setCompany] = useState("");
+  useEffect(() => {
+    setCompany((c) => c || defaultCompany);
+  }, [defaultCompany]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [result, setResult] = useState<StatementResult | null>(null);
   const [busy, setBusy] = useState(false);

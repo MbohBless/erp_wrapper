@@ -24,6 +24,14 @@ class AuthService:
         return user
 
     def login(self, email: str, password: str) -> str:
-        """Authenticate and return a signed JWT access token."""
+        """Authenticate and return a signed JWT access token.
+
+        The token is stamped with the tenant the repository is bound to, so it
+        can only ever be replayed against that same workspace.
+        """
         user = self.authenticate(email, password)
-        return create_access_token(subject=str(user.id), role=str(user.role))
+        return create_access_token(
+            subject=str(user.id),
+            role=str(user.role),
+            tenant_id=self.repo.tenant_id,
+        )

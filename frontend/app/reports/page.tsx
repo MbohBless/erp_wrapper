@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
@@ -20,6 +20,8 @@ import {
 import { useI18n } from "@/lib/i18n";
 import { listStock, listWarehouses } from "@/lib/inventory";
 import { type ReportKey, type ReportParams, downloadReportPdf } from "@/lib/reports";
+import { useAppName } from "@/lib/branding";
+import { useCompanyName } from "@/lib/company";
 
 type NeedKind = "statement" | "stock" | "outstanding";
 type ReportDef = {
@@ -61,10 +63,15 @@ export default function ReportsPage() {
 }
 
 function ReportsContent() {
+  const appName = useAppName();
   const { token } = useAuth();
   const { t } = useI18n();
   const [selected, setSelected] = useState<ReportKey>("income-statement");
-  const [company, setCompany] = useState("EquiMed");
+  const defaultCompany = useCompanyName();
+  const [company, setCompany] = useState("");
+  useEffect(() => {
+    setCompany((c) => c || defaultCompany);
+  }, [defaultCompany]);
   const [fiscalYear, setFiscalYear] = useState(String(new Date().getFullYear()));
   const [warehouse, setWarehouse] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -86,7 +93,7 @@ function ReportsContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span><span>›</span><span className="text-ink">{t("reports.title")}</span>
+        <span>{appName}</span><span>›</span><span className="text-ink">{t("reports.title")}</span>
       </nav>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -150,7 +157,7 @@ function ReportsContent() {
           {def.kind === "statement" && (
             <div className="px-6 pt-5 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
               <Field label={t("reports.company")}>
-                <input className={FIELD} value={company} onChange={(e) => setCompany(e.target.value)} placeholder="EquiMed" />
+                <input className={FIELD} value={company} onChange={(e) => setCompany(e.target.value)} placeholder={defaultCompany || "Company name"} />
               </Field>
               <Field label={t("reports.fiscalYear")}>
                 <input className={FIELD} value={fiscalYear} onChange={(e) => setFiscalYear(e.target.value)} placeholder="2026" />

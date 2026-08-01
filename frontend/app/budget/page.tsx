@@ -7,6 +7,7 @@ import AppShell from "@/components/AppShell";
 import { Icon } from "@/components/icons";
 import { UnauthorizedError, compact, groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useAppName } from "@/lib/branding";
 import {
   ACCOUNT_GROUPS,
   type BudgetReport,
@@ -29,6 +30,7 @@ export default function BudgetPage() {
 }
 
 function BudgetContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const [fiscalYear, setFiscalYear] = useState(String(new Date().getFullYear()));
   const [rows, setRows] = useState<Row[]>([]);
@@ -85,7 +87,7 @@ function BudgetContent() {
 
   return (
     <div className="eq-view">
-      <nav className="flex items-center gap-2 text-xs muted mb-3"><span>EquiMed</span><span>›</span><span className="text-ink">Budget</span></nav>
+      <nav className="flex items-center gap-2 text-xs muted mb-3"><span>{appName}</span><span>›</span><span className="text-ink">Budget</span></nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-5">
         <div>
           <h1 className="text-[32px] mb-1">Budget</h1>

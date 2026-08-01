@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from config import settings
+from tenancy.context import current_tenant_or_none
 
 
 class ERPNextError(Exception):
@@ -27,21 +28,36 @@ class ERPNextNotFound(ERPNextError):
 
 
 class ERPNextClient:
+    """Transport wrapper over one ERPNext site.
+
+    ``site_host`` is the multi-tenant lever. A Frappe bench serving many sites
+    picks the site from the HTTP ``Host`` header, so several tenants can share
+    one ``base_url`` while each reads and writes its own database. Leave it
+    unset for a dedicated ERPNext instance, where ``base_url`` already
+    identifies the tenant.
+    """
+
     def __init__(
         self,
         base_url: str | None = None,
         api_key: str | None = None,
         api_secret: str | None = None,
+        site_host: str | None = None,
     ) -> None:
         self.base_url = (base_url or settings.erpnext_url).rstrip("/")
         self._api_key = api_key or settings.erpnext_api_key
         self._api_secret = api_secret or settings.erpnext_api_secret
+        self.site_host = site_host or None
 
     # -- internals -----------------------------------------------------------
     def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}
         if self._api_key and self._api_secret:
             headers["Authorization"] = f"token {self._api_key}:{self._api_secret}"
+        if self.site_host:
+            # Frappe resolves the site from Host; this is what keeps tenant A's
+            # request off tenant B's database on a shared bench.
+            headers["Host"] = self.site_host
         return headers
 
     @staticmethod
@@ -154,8 +170,22 @@ class ERPNextClient:
 
 
 def get_erpnext_client() -> ERPNextClient:
-    """FastAPI dependency provider for the ERPNext client."""
-    return ERPNextClient()
+    """FastAPI dependency provider for the ERPNext client.
+
+    Builds the client from the *request's* tenant rather than from global
+    settings — this one function is what makes every ERPNext-backed service in
+    the app multi-tenant. Falls back to configuration outside a tenant-scoped
+    request (startup tasks, scripts).
+    """
+    tenant = current_tenant_or_none()
+    if tenant is None:
+        return ERPNextClient()
+    return ERPNextClient(
+        base_url=tenant.erpnext_url or settings.erpnext_url,
+        api_key=tenant.erpnext_api_key or settings.erpnext_api_key,
+        api_secret=tenant.erpnext_api_secret or settings.erpnext_api_secret,
+        site_host=tenant.erpnext_site,
+    )
 
 
 # ===========================================================================

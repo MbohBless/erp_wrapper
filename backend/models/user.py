@@ -3,10 +3,11 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+from models.mixins import TenantScoped
 
 
 class Role(str, Enum):
@@ -18,13 +19,16 @@ class Role(str, Enum):
     BIOMEDICAL_ENGINEER = "Biomedical Engineer"
 
 
-class User(Base):
+class User(Base, TenantScoped):
     __tablename__ = "users"
+    # Email is unique *within* a tenant, not globally: two customers may each
+    # have an admin@ account, and one must never collide with the other.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(
-        String(255), unique=True, index=True, nullable=False
-    )
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     # Stored as its string value (Role subclasses str), e.g. "Administrator".

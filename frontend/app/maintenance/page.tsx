@@ -16,6 +16,7 @@ import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, shortDate } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
 import {
   type Ticket,
   completeTicket,
@@ -46,6 +47,7 @@ type Dialog =
   | null;
 
 function MaintenanceContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
@@ -88,7 +90,7 @@ function MaintenanceContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("maintenance.title")}</span>
       </nav>

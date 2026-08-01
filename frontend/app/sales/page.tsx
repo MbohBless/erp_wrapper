@@ -18,6 +18,7 @@ import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { type SalesInvoice, listSales } from "@/lib/sales";
+import { useAppName } from "@/lib/branding";
 
 export default function SalesPage() {
   return (
@@ -29,6 +30,7 @@ export default function SalesPage() {
 
 
 function SalesContent() {
+  const appName = useAppName();
   const { t } = useI18n();
   const { token, logout } = useAuth();
   const qc = useQueryClient();
@@ -80,7 +82,7 @@ function SalesContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("sales.title")}</span>
       </nav>

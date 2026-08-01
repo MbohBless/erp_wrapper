@@ -23,12 +23,26 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(
-    subject: str, role: str, expires_minutes: int | None = None
+    subject: str,
+    role: str,
+    tenant_id: str,
+    expires_minutes: int | None = None,
 ) -> str:
+    """Mint an access token bound to a user *and* the tenant they signed in to.
+
+    The ``tid`` claim is not decoration: it is checked against the tenant the
+    request resolved to, so a token minted on one workspace is inert on
+    another even though both are signed with the same key.
+    """
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.access_token_expire_minutes
     )
-    payload: dict[str, Any] = {"sub": subject, "role": role, "exp": expire}
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "role": role,
+        "tid": tenant_id,
+        "exp": expire,
+    }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

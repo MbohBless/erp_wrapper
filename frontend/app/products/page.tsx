@@ -16,6 +16,7 @@ import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
 import {
   type Product,
   deleteProduct,
@@ -37,6 +38,7 @@ type Dialog =
   | null;
 
 function ProductsContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
@@ -88,7 +90,7 @@ function ProductsContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("products.title")}</span>
       </nav>

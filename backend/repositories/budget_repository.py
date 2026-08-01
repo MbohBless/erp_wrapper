@@ -1,4 +1,4 @@
-"""App-DB access for budget lines (monthly targets)."""
+"""App-DB access for budget lines (monthly targets), scoped to one tenant."""
 
 import json
 
@@ -19,21 +19,38 @@ def _months(row: Budget) -> list[float]:
 
 
 class BudgetRepository:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, tenant_id: str) -> None:
         self.db = db
+        self.tenant_id = tenant_id
 
     def get_lines(self, fiscal_year: str) -> list[tuple[str, str, list[float]]]:
         rows = self.db.execute(
-            select(Budget).where(Budget.fiscal_year == fiscal_year).order_by(Budget.id)
+            select(Budget)
+            .where(
+                Budget.fiscal_year == fiscal_year,
+                Budget.tenant_id == self.tenant_id,
+            )
+            .order_by(Budget.id)
         ).scalars()
         return [(r.category, r.account_prefix, _months(r)) for r in rows]
 
     def replace_lines(self, fiscal_year: str, lines: list[tuple[str, str, list[float]]]) -> None:
-        self.db.execute(delete(Budget).where(Budget.fiscal_year == fiscal_year))
+        self.db.execute(
+            delete(Budget).where(
+                Budget.fiscal_year == fiscal_year,
+                Budget.tenant_id == self.tenant_id,
+            )
+        )
         for category, prefix, months in lines:
             months = [float(x) for x in (months + [0.0] * 12)[:12]]
             self.db.add(Budget(
+                tenant_id=self.tenant_id,
                 fiscal_year=fiscal_year, category=category, account_prefix=prefix,
                 amount=round(sum(months), 2), months_json=json.dumps(months),
             ))
+        self.db.commit()
+
+    def delete_all(self) -> None:
+        """Remove every budget line in this tenant (offboarding)."""
+        self.db.execute(delete(Budget).where(Budget.tenant_id == self.tenant_id))
         self.db.commit()

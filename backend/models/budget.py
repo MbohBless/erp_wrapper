@@ -5,9 +5,10 @@ from sqlalchemy import Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+from models.mixins import TenantScoped
 
 
-class Budget(Base):
+class Budget(Base, TenantScoped):
     __tablename__ = "budget_line"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

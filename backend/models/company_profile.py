@@ -1,21 +1,29 @@
-"""Company / branding profile ORM model.
+"""Company profile ORM model — the tenant's *legal* identity.
 
 App-owned configuration (not business data): drives the branded letterhead and
-signatory block on generated PDF reports. Stored as a singleton row (id == 1).
+signatory block on generated PDF reports. One row per tenant.
+
+Kept deliberately separate from ``models.branding.TenantBranding``, which owns
+the tenant's *application skin*. They are different concerns with different
+editors and different assets: a print letterhead is not a UI theme.
 """
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+from models.mixins import TenantScoped
 
 
-class CompanyProfile(Base):
+class CompanyProfile(Base, TenantScoped):
     __tablename__ = "company_profile"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_company_profile_tenant"),
+    )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     display_name: Mapped[str] = mapped_column(String(160), default="EquiMed")
     legal_name: Mapped[str] = mapped_column(String(200), default="EquiMed SA")

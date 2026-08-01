@@ -16,6 +16,7 @@ import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
 import {
   type Supplier,
   deleteSupplier,
@@ -37,6 +38,7 @@ type Dialog =
   | null;
 
 function SuppliersContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
@@ -81,7 +83,7 @@ function SuppliersContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span><span>›</span><span className="text-ink">{t("suppliers.title")}</span>
+        <span>{appName}</span><span>›</span><span className="text-ink">{t("suppliers.title")}</span>
       </nav>
       <div className="flex items-end justify-between gap-5 flex-wrap mb-5">
         <div>

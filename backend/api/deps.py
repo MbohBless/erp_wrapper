@@ -12,6 +12,7 @@ from database import get_db
 from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role, User
 from repositories.batch_repository import BatchRepository
+from repositories.branding_repository import BrandingRepository
 from repositories.company_repository import CompanyRepository
 from repositories.customer_repository import CustomerRepository
 from repositories.dashboard_repository import DashboardRepository
@@ -28,6 +29,7 @@ from repositories.supplier_repository import SupplierRepository
 from repositories.user_repository import UserRepository
 from repositories.warehouse_repository import WarehouseRepository
 from services.auth_service import AuthService
+from services.branding_service import BrandingService
 from services.company_service import CompanyService
 from services.customer_service import CustomerService
 from services.dashboard_service import DashboardService
@@ -42,16 +44,61 @@ from services.report_service import ReportService
 from services.sales_service import SalesService
 from services.supplier_service import SupplierService
 from services.user_service import UserService
+from tenancy import TenantContext, current_tenant
 from utils.security import decode_access_token
 
 # tokenUrl is relative to the app root; drives Swagger's "Authorize" button.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
+# --- Tenant ---------------------------------------------------------------
+# Resolved by TenantMiddleware before any route runs. Exposed as dependencies
+# so routers and services declare the tenant they need instead of reaching for
+# the ContextVar themselves.
+def get_tenant() -> TenantContext:
+    return current_tenant()
+
+
+def get_tenant_id(tenant: TenantContext = Depends(get_tenant)) -> str:
+    return tenant.id
+
+
+def require_feature(name: str):
+    """Dependency factory gating a route on the tenant's plan features."""
+
+    def checker(tenant: TenantContext = Depends(get_tenant)) -> TenantContext:
+        if not tenant.has_feature(name):
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                f"'{name}' is not included in the {tenant.plan} plan.",
+            )
+        return tenant
+
+    return checker
+
+
 # --- DB-backed providers (users/auth): two-layer DI so the repository can be
-#     injected/overridden independently of the service. ---
-def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
-    return UserRepository(db)
+#     injected/overridden independently of the service. Every app-DB repository
+#     is constructed against the request's tenant. ---
+def get_user_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> UserRepository:
+    return UserRepository(db, tenant_id)
+
+
+def get_company_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> CompanyRepository:
+    return CompanyRepository(db, tenant_id)
+
+
+def get_branding_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> BrandingRepository:
+    return BrandingRepository(db, tenant_id)
 
 
 def get_user_service(
@@ -64,6 +111,18 @@ def get_auth_service(
     repo: UserRepository = Depends(get_user_repository),
 ) -> AuthService:
     return AuthService(repo)
+
+
+def get_company_service(
+    repo: CompanyRepository = Depends(get_company_repository),
+) -> CompanyService:
+    return CompanyService(repo)
+
+
+def get_branding_service(
+    repo: BrandingRepository = Depends(get_branding_repository),
+) -> BrandingService:
+    return BrandingService(repo)
 
 
 # --- ERPNext-backed service providers ---
@@ -120,9 +179,9 @@ def _build_inventory_service(client: ERPNextClient) -> InventoryService:
 
 def get_report_service(
     client: ERPNextClient = Depends(get_erpnext_client),
-    db: Session = Depends(get_db),
+    company: CompanyService = Depends(get_company_service),
 ) -> ReportService:
-    profile = CompanyService(CompanyRepository(db)).get_profile().model_dump()
+    profile = company.get_profile().model_dump()
     return ReportService(
         finance=FinanceService(FinanceRepository(client)),
         inventory=_build_inventory_service(client),
@@ -135,6 +194,7 @@ def get_report_service(
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     repo: UserRepository = Depends(get_user_repository),
+    tenant: TenantContext = Depends(get_tenant),
 ) -> User:
     credentials_exc = HTTPException(
         status.HTTP_401_UNAUTHORIZED,
@@ -147,6 +207,13 @@ def get_current_user(
         if subject is None:
             raise credentials_exc
     except InvalidTokenError:
+        raise credentials_exc
+
+    # Cross-tenant replay guard. All workspaces share one signing key, so a
+    # token from tenant A is cryptographically valid on tenant B's host — this
+    # claim check is what actually stops it. The repository lookup below is
+    # tenant-scoped too, so this is defence in depth, not the only barrier.
+    if payload.get("tid") != tenant.id:
         raise credentials_exc
 
     user = repo.get(int(subject))

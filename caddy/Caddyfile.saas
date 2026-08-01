@@ -1,0 +1,82 @@
+# Public reverse proxy — SaaS plane (TENANCY_MODE=multi).
+#
+# Select it in .env:  CADDYFILE=Caddyfile.saas
+# then:               docker compose --profile saas up -d --build
+#
+# Three kinds of hostname arrive here:
+#
+#   console.<your domain>   the operator console (control plane)
+#   <slug>.${BASE_DOMAIN}   a tenant workspace on our own domain
+#   erp.customer.cm         a tenant's own domain, CNAME'd to us
+#
+# The last two are served by the SAME frontend/backend pair — the backend
+# resolves which tenant it is from the Host header. That is the whole point of
+# the shared plane: one deployment, many customers, isolation enforced in the
+# application rather than by running N copies of it.
+#
+# Certificates are issued on demand rather than from a wildcard, so no DNS
+# provider plugin is needed and a customer's own domain works the moment they
+# point it at us. Caddy asks the control plane before every issuance — see the
+# `ask` endpoint below — so pointing DNS at this server is NOT enough to make
+# us request a certificate on someone's behalf.
+
+{
+	admin off
+
+	on_demand_tls {
+		# 200 = issue, anything else = refuse. The control plane only says yes
+		# for a domain that is registered to a tenant AND verified.
+		ask http://platform-api:8000/internal/tls/check
+
+		# Rate limits: a flood of unknown SNI names must not turn into a flood
+		# of ACME orders.
+		interval 2m
+		burst 5
+	}
+}
+
+# ---- Operator console -------------------------------------------------------
+# Its own hostname, its own API prefix (/papi, not /api). Keeping the prefixes
+# distinct means a proxy misconfiguration fails loudly instead of quietly
+# pointing operator tooling at a customer's backend.
+{$PLATFORM_DOMAIN} {
+	handle_path /papi/* {
+		reverse_proxy platform-api:8000
+	}
+
+	handle {
+		reverse_proxy platform-ui:3100
+	}
+}
+
+# ---- Tenant workspaces ------------------------------------------------------
+# Matches every other HTTPS hostname: platform subdomains and custom domains
+# alike. Unknown hosts still reach the backend, which answers 404 — the tenant
+# directory, not the proxy, is the authority on who exists.
+https:// {
+	tls {
+		on_demand
+	}
+
+	# Preserve the original Host so the backend can resolve the tenant. Caddy
+	# forwards it by default; X-Forwarded-Host is set explicitly because the
+	# tenant middleware prefers it when present.
+	handle_path /api/* {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:3000 {
+			header_up X-Forwarded-Host {host}
+		}
+	}
+}
+
+# ---- HTTP -> HTTPS ----------------------------------------------------------
+# Everything on the SaaS plane is TLS-only; sessions and tenant identity must
+# not travel in clear text.
+:80 {
+	redir https://{host}{uri} permanent
+}

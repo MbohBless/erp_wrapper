@@ -17,6 +17,7 @@ import { UnauthorizedError, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { type Customer, deleteCustomer, listCustomers } from "@/lib/customers";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
 
 export default function CustomersPage() {
   return (
@@ -32,6 +33,7 @@ type Dialog =
   | null;
 
 function CustomersContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -83,7 +85,7 @@ function CustomersContent() {
     <div className="eq-view">
       {/* Header */}
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("customers.title")}</span>
       </nav>

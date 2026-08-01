@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from api.deps import require_roles
+from api.deps import get_tenant_id, require_roles
 from database import get_db
 from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role
@@ -26,8 +26,11 @@ can_manage = require_roles(Role.MANAGER, Role.ACCOUNTANT)
 def get_budget_service(
     client: ERPNextClient = Depends(get_erpnext_client),
     db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> BudgetService:
-    return BudgetService(FinanceService(FinanceRepository(client)), BudgetRepository(db))
+    return BudgetService(
+        FinanceService(FinanceRepository(client)), BudgetRepository(db, tenant_id)
+    )
 
 
 def _current_fy() -> str:

@@ -16,6 +16,7 @@ import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
 import {
   type Equipment,
   deleteEquipment,
@@ -45,6 +46,7 @@ type Dialog =
   | null;
 
 function EquipmentContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
@@ -92,7 +94,7 @@ function EquipmentContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("equipment.title")}</span>
       </nav>

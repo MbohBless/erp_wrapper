@@ -191,7 +191,7 @@ services:
         condition: service_started
 
   # ==========================================================================
-  # Application layer (skeletons only — no business logic)
+  # Application layer — the tenant-facing product
   # ==========================================================================
   backend:
     build:
@@ -210,6 +210,17 @@ services:
       ERPNEXT_API_KEY: ${ERPNEXT_API_KEY:-}
       ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET:-}
       CORS_ORIGINS: '["*"]'
+      # --- Tenancy ---
+      # In "single" the app serves one implicit tenant and never contacts the
+      # control plane; in "multi" it resolves the tenant per request from Host.
+      TENANCY_MODE: ${TENANCY_MODE:-single}
+      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-default}
+      DEFAULT_TENANT_NAME: ${DEFAULT_TENANT_NAME:-EquiMed}
+      BASE_DOMAIN: ${BASE_DOMAIN:-equimed.app}
+      CONTROL_PLANE_URL: http://platform-api:8000
+      CONTROL_PLANE_TOKEN: ${INTERNAL_API_TOKEN:-}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-}
+      TENANT_CACHE_TTL: "30"
     volumes:
       - backend-data:/app/data
     expose:
@@ -233,26 +244,86 @@ services:
         condition: service_started
 
   # ==========================================================================
-  # Public reverse proxy — Caddy (single entry point on port 80)
-  #   localhost/        -> Next.js frontend
-  #   localhost/api/*   -> FastAPI backend (prefix stripped)
-  #   erp.localhost/    -> ERPNext (also reachable directly on :${ERPNEXT_PORT})
+  # Control plane — SaaS only (`--profile saas`)
+  #
+  # Owns the tenant registry, provisioning, suspension and plans. Deliberately
+  # a separate service with its own database and its own signing key: it can
+  # suspend every customer at once, so it must not share a blast radius with
+  # the tenant app. Never expose its /internal prefix publicly.
+  # ==========================================================================
+  platform-api:
+    profiles: ["saas"]
+    build:
+      context: ./platform/api
+    restart: unless-stopped
+    environment:
+      APP_NAME: "EquiMed Control Plane"
+      ROOT_PATH: /papi
+      DATABASE_URL: sqlite:////app/data/platform.db
+      JWT_SECRET_KEY: ${PLATFORM_JWT_SECRET_KEY:-CHANGE_ME_PLATFORM_SECRET}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-}
+      TENANT_APP_URL: http://backend:8000
+      FIRST_OWNER_EMAIL: ${FIRST_OWNER_EMAIL:-owner@equimed.app}
+      FIRST_OWNER_PASSWORD: ${FIRST_OWNER_PASSWORD:-changeme12345}
+      FIRST_OWNER_NAME: ${FIRST_OWNER_NAME:-Platform Owner}
+      BASE_DOMAIN: ${BASE_DOMAIN:-equimed.app}
+      DEFAULT_ERPNEXT_URL: http://erpnext-nginx:8080
+      ERPNEXT_SITE_SUFFIX: ${ERPNEXT_SITE_SUFFIX:-erp.local}
+      PROVISIONER: ${PROVISIONER:-noop}
+      BENCH_CONTAINER: equimed-erpnext-backend-1
+      CORS_ORIGINS: '["*"]'
+    volumes:
+      - platform-data:/app/data
+      # Only needed when PROVISIONER=bench. Mounting the Docker socket lets
+      # this container run commands on the host daemon — read
+      # docs/multi-tenancy.md before enabling it.
+      # - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "8000"
+
+  platform-ui:
+    profiles: ["saas"]
+    build:
+      context: ./platform/ui
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3100"
+    depends_on:
+      platform-api:
+        condition: service_started
+
+  # ==========================================================================
+  # Public reverse proxy — Caddy (single entry point)
+  #
+  # Single tenant:  localhost/ -> frontend, /api/* -> backend
+  # SaaS:           *.${BASE_DOMAIN} -> the same frontend/backend pair, which
+  #                 resolve the tenant from Host; ${PLATFORM_DOMAIN} -> the
+  #                 operator console; custom domains via on-demand TLS.
   # ==========================================================================
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN:-equimed.app}
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-console.equimed.app}
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddyfile (single-tenant) or Caddyfile.saas (shared plane) — see .env.
+      - ./caddy/${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     ports:
       - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     depends_on:
       - frontend
       - backend
       - erpnext-nginx
 
 volumes:
+  platform-data:
   sites:
   logs:
   db-data:

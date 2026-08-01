@@ -16,6 +16,7 @@ import TableSkeleton from "@/components/ui/TableSkeleton";
 import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
 import {
   type Batch,
   type BatchInput,
@@ -46,6 +47,7 @@ export default function InventoryPage() {
 }
 
 function InventoryContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("stock");
@@ -63,7 +65,7 @@ function InventoryContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span>{t("inventory.operations")}</span>
         <span>›</span>

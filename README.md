@@ -88,6 +88,11 @@ For HTTPS, backups and production hardening, see
   invoices/bills, stock, loans) when a business starts on EquiMed.
 - **Platform** — JWT auth, six roles with per-endpoint access control, a KPI
   dashboard, and French/English UI.
+- **White-label** — product name, logos, theme colours and dashboard composition
+  are all per-customer settings, not code.
+- **Multi-tenant (optional)** — the same build runs as a self-hosted single-tenant
+  install *or* as a shared SaaS plane with a control plane for provisioning,
+  suspension, plans and billing-driven feature gating.
 
 Roles: `Administrator`, `Manager`, `Sales`, `Store Keeper`, `Accountant`,
 `Biomedical Engineer`. Finance & reports are limited to Manager/Accountant;
@@ -100,15 +105,20 @@ user management to Administrator.
 ```
 Browser → Caddy → Next.js (frontend) → FastAPI (backend) → ERPNext → MariaDB
                                             │                   ↑
-                                    SQLite (app auth)     Redis (cache/queue)
+                                    SQLite (app data)     Redis (cache/queue)
 ```
 
 - The frontend never talks to ERPNext directly — only the backend does, through
   a single integration module (`backend/integrations/erpnext.py`).
-- App users/auth live in the backend's own small database; all business and
-  accounting data lives in ERPNext.
+- App users/auth/branding live in the backend's own small database; all business
+  and accounting data lives in ERPNext.
 
-More detail: **[docs/architecture.md](docs/architecture.md)**.
+On the SaaS plane a separate **control plane** (`platform/`) owns the tenant
+registry and provisioning, and the tenant app resolves which customer a request
+belongs to from its hostname.
+
+More detail: **[docs/architecture.md](docs/architecture.md)** and
+**[docs/multi-tenancy.md](docs/multi-tenancy.md)**.
 
 ---
 
@@ -125,6 +135,13 @@ uvicorn main:app --reload    # http://localhost:8000
 npm install
 npm run dev                  # http://localhost:3000 (proxies /api → :8000)
 npm run build                # type-check + production build
+
+# Control plane (SaaS plane only)
+cd platform/api && python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt && pytest
+uvicorn main:app --reload --port 8100
+
+cd platform/ui && npm install && npm run dev   # http://localhost:3100
 ```
 
 Running the tests **inside the running backend container**? Point them at a
@@ -140,13 +157,16 @@ docker compose exec -e DATABASE_URL="sqlite:////tmp/pytest.db" -T backend \
 ## Project layout
 
 ```
-backend/    FastAPI service — api / services / repositories / integrations /
-            schemas / models / utils, plus tests. integrations/erpnext.py is the
-            only module that talks to ERPNext.
-frontend/   Next.js 14 (App Router) + Tailwind app — app / components / lib.
-caddy/      Reverse proxy (app on :80, ERPNext desk on :8080).
-scripts/    seed_erpnext.py (demo data), backup.sh (nightly backup).
-docs/       api.md · architecture.md · deployment.md · coding_guidelines.md
+backend/       FastAPI service — api / services / repositories / integrations /
+               schemas / models / tenancy / utils, plus tests.
+               integrations/erpnext.py is the only module that talks to ERPNext.
+frontend/      Next.js 14 (App Router) + Tailwind app — app / components / lib.
+platform/api   Control plane API (tenant registry, plans, provisioning, audit).
+platform/ui    Operator console — its own palette, its own /papi prefix.
+caddy/         Caddyfile (single-tenant) · Caddyfile.saas (shared plane).
+scripts/       seed_erpnext.py (demo data), backup.sh (per-site backup).
+docs/          api.md · architecture.md · deployment.md · multi-tenancy.md ·
+               coding_guidelines.md
 docker-compose.yml
 ```
 
@@ -156,6 +176,8 @@ docker-compose.yml
 
 - **[docs/api.md](docs/api.md)** — endpoints, roles, payloads
 - **[docs/architecture.md](docs/architecture.md)** — layers & ERPNext integration
+- **[docs/multi-tenancy.md](docs/multi-tenancy.md)** — tenancy, isolation, control
+  plane, white-labelling, and the operational risks that come with them
 - **[docs/deployment.md](docs/deployment.md)** — Compose services, HTTPS, backups
 - **[docs/coding_guidelines.md](docs/coding_guidelines.md)** — backend conventions
 

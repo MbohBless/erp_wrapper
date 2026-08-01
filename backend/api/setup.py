@@ -8,7 +8,7 @@ Access (Administrator always allowed):
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from api.deps import get_current_user, require_roles
+from api.deps import get_current_user, get_tenant_id, require_roles
 from database import get_db
 from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role
@@ -26,8 +26,13 @@ can_post = require_roles(Role.MANAGER, Role.ACCOUNTANT)
 def get_setup_service(
     client: ERPNextClient = Depends(get_erpnext_client),
     db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> SetupService:
-    return SetupService(SetupRepository(client), BooksSetupRepository(db), BudgetRepository(db))
+    return SetupService(
+        SetupRepository(client),
+        BooksSetupRepository(db, tenant_id),
+        BudgetRepository(db, tenant_id),
+    )
 
 
 @router.get("/status", response_model=SetupStatus, dependencies=[Depends(get_current_user)])

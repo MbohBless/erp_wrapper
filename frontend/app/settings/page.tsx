@@ -7,6 +7,7 @@ import AppShell from "@/components/AppShell";
 import Blueprint from "@/components/Blueprint";
 import { ActiveTag } from "@/components/ui/StatusTag";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import AppearanceSection from "@/components/settings/AppearanceSection";
 import CompanyBrandingSection from "@/components/settings/CompanyBrandingSection";
 import UserDialog, { type UserFormValue } from "@/components/settings/UserDialog";
 import { Icon } from "@/components/icons";
@@ -14,6 +15,7 @@ import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { LANGS, useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
+import { useAppName } from "@/lib/branding";
 import {
   type User,
   createUser,
@@ -32,6 +34,7 @@ export default function SettingsPage() {
 }
 
 function SettingsContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const { t, lang, setLang } = useI18n();
@@ -52,7 +55,7 @@ function SettingsContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span><span>›</span><span className="text-ink">{t("settings.title")}</span>
+        <span>{appName}</span><span>›</span><span className="text-ink">{t("settings.title")}</span>
       </nav>
       <div className="mb-6">
         <h1 className="text-[32px] mb-1">{t("settings.title")}</h1>
@@ -69,15 +72,18 @@ function SettingsContent() {
           </div>
         </Section>
 
-        {/* Company & branding (report letterhead) */}
+        {/* Company identity — drives the PDF letterhead */}
         {token && <CompanyBrandingSection token={token} canEdit={canBrand} />}
+
+        {/* Application skin — white-label theme, logos and dashboard layout */}
+        {token && <AppearanceSection token={token} canEdit={canBrand} />}
 
         {/* Books setup */}
         <Section title="Books setup" note="Opening balances">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="text-sm muted max-w-lg">
               Set your starting financial position — bank & cash, open invoices and bills, stock,
-              equipment and loans — as of your start date. EquiMed posts it to the ledger once.
+              equipment and loans — as of your start date. {appName} posts it to the ledger once.
             </div>
             <a href="/setup" className="btn btn-outlined shrink-0">Open setup wizard</a>
           </div>

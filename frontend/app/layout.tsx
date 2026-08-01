@@ -4,8 +4,11 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "./providers";
 
+// Static fallback only. The real title/favicon are applied client-side by
+// BrandingProvider once the tenant's branding resolves — a build-time value
+// cannot know which workspace is being served.
 export const metadata: Metadata = {
-  title: "EquiMed — Distribution Suite",
+  title: "Distribution Suite",
   description: "Medical equipment distribution management platform",
 };
 

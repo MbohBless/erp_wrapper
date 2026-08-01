@@ -3,7 +3,9 @@
 import { usePathname } from "next/navigation";
 
 import { Icon } from "@/components/icons";
+import { useBranding } from "@/lib/branding";
 import { useI18n } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
 
 // Nav keys that map to real routes (others are placeholders for now).
 const ROUTES: Record<string, string> = {
@@ -69,25 +71,42 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { branding } = useBranding();
+  const { theme } = useTheme();
   const width = collapsed ? "w-20" : "w-[280px]";
   const initials = (user ?? "AM").slice(0, 2).toUpperCase();
+  // Prefer the variant matching the active theme; fall back to the other so a
+  // tenant who uploaded only one logo still gets it.
+  const logo =
+    theme === "dark"
+      ? branding.logo_dark_data_url || branding.logo_light_data_url
+      : branding.logo_light_data_url || branding.logo_dark_data_url;
 
   return (
     <aside
       className={`${width} hidden md:flex flex-col shrink-0 h-full border-r border-divider bg-bg transition-[width] duration-200`}
     >
-      {/* Brand */}
+      {/* Brand — the tenant's logo and name when they have set one. */}
       <div className="h-[72px] shrink-0 flex items-center gap-3 px-5 border-b border-divider">
-        <div className="w-[34px] h-[34px] rounded-lg shrink-0 grid place-items-center bg-accent text-bg">
-          <Icon name="flask" size={20} sw={2} />
-        </div>
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logo}
+            alt={branding.app_name}
+            className="w-[34px] h-[34px] rounded-lg shrink-0 object-contain"
+          />
+        ) : (
+          <div className="w-[34px] h-[34px] rounded-lg shrink-0 grid place-items-center bg-accent text-bg">
+            <Icon name="flask" size={20} sw={2} />
+          </div>
+        )}
         {!collapsed && (
-          <div className="leading-none">
-            <div className="font-heading font-bold text-[19px] tracking-tight">
-              EquiMed
+          <div className="leading-none min-w-0">
+            <div className="font-heading font-bold text-[19px] tracking-tight truncate">
+              {branding.app_name}
             </div>
-            <div className="text-[10px] tracking-[0.14em] uppercase muted mt-0.5">
-              {t("brand.tagline")}
+            <div className="text-[10px] tracking-[0.14em] uppercase muted mt-0.5 truncate">
+              {branding.tagline || t("brand.tagline")}
             </div>
           </div>
         )}

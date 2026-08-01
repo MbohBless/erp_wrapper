@@ -10,6 +10,7 @@ import { groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { listCustomers } from "@/lib/customers";
 import { listSuppliers } from "@/lib/suppliers";
+import { useAppName } from "@/lib/branding";
 import {
   type BudgetItem,
   type LoanItem,
@@ -43,6 +44,7 @@ export default function SetupPage() {
 }
 
 function SetupWizard() {
+  const appName = useAppName();
   const { token } = useAuth();
   const router = useRouter();
 
@@ -118,7 +120,7 @@ function SetupWizard() {
     <div className="eq-view">
       <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
         <div>
-          <nav className="flex items-center gap-2 text-xs muted mb-1"><span>EquiMed</span><span>›</span><span className="text-ink">Set up your books</span></nav>
+          <nav className="flex items-center gap-2 text-xs muted mb-1"><span>{appName}</span><span>›</span><span className="text-ink">Set up your books</span></nav>
           <h1 className="text-[30px] font-heading font-semibold leading-tight">Set up your books</h1>
         </div>
         <div className="inline-flex items-center gap-2 text-[12.5px] font-medium px-3 py-1.5 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] text-accent">
@@ -146,7 +148,7 @@ function SetupWizard() {
             <div className="text-[11px] tracking-[0.1em] uppercase muted-3 mb-1"><span className="text-accent font-semibold">Step {step + 1}</span> · {step === 8 ? "Optional" : "of " + STEPS.length}</div>
 
             {step === 0 && (
-              <StepShell title="When should EquiMed start keeping your books?" lead="Pick the day your finances are reconciled and up to date — your cut-over date. We record your balances as of this day; everything after it, EquiMed tracks for you.">
+              <StepShell title={`When should ${appName} start keeping your books?`} lead={`Pick the day your finances are reconciled and up to date — your cut-over date. We record your balances as of this day; everything after it, ${appName} tracks for you.`}>
                 <div className="max-w-[260px]"><label className={LABEL}>Start date</label>
                   <input className={`${FIELD} num`} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
               </StepShell>
@@ -162,7 +164,7 @@ function SetupWizard() {
             )}
 
             {step === 2 && (
-              <ItemStep title="Money customers owe you" lead="Add each unpaid customer invoice separately, so EquiMed can chase payment and age it correctly."
+              <ItemStep title="Money customers owe you" lead={`Add each unpaid customer invoice separately, so ${appName} can chase payment and age it correctly.`}
                 rows={ar} setRows={setAR} parties={(customersQ.data ?? []).map((c) => ({ id: c.id, name: c.name }))} partyLabel="Customer" refLabel="Invoice #" addLabel="Add invoice" />
             )}
             {step === 3 && (
@@ -202,7 +204,7 @@ function SetupWizard() {
             )}
 
             {step === 7 && (
-              <StepShell title="Owner's equity" lead="This is what the owners have put into the business. EquiMed works it out so the books balance — what you own minus what you owe.">
+              <StepShell title="Owner's equity" lead={`This is what the owners have put into the business. ${appName} works it out so the books balance — what you own minus what you owe.`}>
                 <div className="rounded-xl border border-divider p-5 max-w-md">
                   <Row k="What you own (assets)" v={xaf(t.assets)} />
                   <Row k="What you owe (liabilities)" v={"− " + xaf(t.liab)} />
@@ -215,7 +217,7 @@ function SetupWizard() {
             )}
 
             {step === 8 && (
-              <StepShell title="Set a budget" lead="Optional. Give EquiMed a yearly target per category and reports can show plan vs actual. Skip it and set budgets any time.">
+              <StepShell title="Set a budget" lead={`Optional. Give ${appName} a yearly target per category and reports can show plan vs actual. Skip it and set budgets any time.`}>
                 <div className="overflow-x-auto eq-scroll border border-divider rounded-xl max-w-xl">
                   <table className="w-full text-sm border-collapse">
                     <thead><tr className="muted bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)]">
@@ -233,7 +235,7 @@ function SetupWizard() {
             )}
 
             {step === 9 && (
-              <StepShell title="Your opening snapshot" lead={`Where your books stand on ${asOf}. Post it once and EquiMed takes over from here.`}>
+              <StepShell title="Your opening snapshot" lead={`Where your books stand on ${asOf}. Post it once and ${appName} takes over from here.`}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-xl border border-divider p-4 bg-[color-mix(in_srgb,var(--color-text)_2%,transparent)]">
                     <div className="text-[11px] uppercase tracking-wide muted font-semibold mb-2">What you own</div>

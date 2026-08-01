@@ -1,8 +1,12 @@
-# Public reverse proxy for the Medical Equipment ERP.
+# Public reverse proxy — single-tenant / self-hosted (TENANCY_MODE=single).
 #
-# Served over plain HTTP on :80 for local/single-VPS V1. To enable automatic
-# HTTPS, replace the `:80` site address with your real domain (e.g.
+# Served over plain HTTP on :80 for local/single-VPS deployments. To enable
+# automatic HTTPS, replace the `:80` site address with your real domain (e.g.
 # `erp.example.com`) and Caddy will provision a certificate automatically.
+#
+# For the shared SaaS plane use `Caddyfile.saas` instead — set
+# `CADDYFILE=Caddyfile.saas` in .env. That file adds the operator console,
+# per-tenant hostnames and on-demand TLS for customer domains.
 
 {
 	# No admin API surface needed inside the container.
