@@ -20,6 +20,9 @@ FEATURE_CUSTOM_DOMAIN = "custom_domain"
 FEATURE_REPORTS = "reports"
 FEATURE_BUDGET = "budget"
 FEATURE_DEDICATED_ERP = "dedicated_erp"
+# Mobile-money collections and payouts. The tenant supplies their own merchant
+# credentials — we orchestrate and reconcile, we never hold their funds.
+FEATURE_MOBILE_MONEY = "mobile_money"
 
 KNOWN_FEATURES = (
     FEATURE_BRANDING,
@@ -28,6 +31,7 @@ KNOWN_FEATURES = (
     FEATURE_REPORTS,
     FEATURE_BUDGET,
     FEATURE_DEDICATED_ERP,
+    FEATURE_MOBILE_MONEY,
 )
 
 

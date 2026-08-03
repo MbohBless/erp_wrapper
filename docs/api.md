@@ -283,6 +283,51 @@ configured as a chart, and duplicates or a `span` outside 1–4 are `422`.
 | `chart.segment_mix` | `donut`, `progress`, `stacked-bar` |
 | `kpi.*`, `list.*`, `table.*`, `feed.*` | none |
 
+## Payment gateway  `/api/gateway`
+
+Mobile-money collections and payouts (MTN MoMo / Orange Money via CamPay,
+Fapshi or MTN direct). Requires the `mobile_money` plan feature — 402 otherwise.
+
+**The tenant owns the merchant account**; funds settle to them and EquiMed never
+holds customer money. Credentials are per tenant, encrypted at rest, and never
+returned by any endpoint.
+
+| Method | Path | Access | Notes |
+| --- | --- | --- | --- |
+| GET | `/gateway/providers/catalog` | Manager | Which providers exist and what each needs configured. |
+| GET | `/gateway/providers` | Manager | Reports *which* credential fields are set, never their values. |
+| PUT | `/gateway/providers` | Manager | Save credentials; validated at save time (422 if incomplete). Omit `credentials` to edit without re-entering secrets. |
+| POST | `/gateway/providers/{provider}/activate` | Manager | Exactly one provider is active per tenant. |
+| POST | `/gateway/providers/deactivate` | Manager | Tenant's own kill switch. |
+| DELETE | `/gateway/providers/{provider}` | Manager | |
+| POST | `/gateway/collections` | Manager, Accountant | Request payment. Amount defaults to the invoice's **outstanding** balance. A second request while one is in flight returns the existing attempt unless `force: true`. |
+| POST | `/gateway/payouts` | Manager, Accountant | Settle a supplier bill. |
+| GET | `/gateway/payments` | Manager, Accountant, Sales | Filter by `direction`, `status`, `reconciliation`, `invoice_id`. |
+| GET | `/gateway/payments/{id}?refresh=true` | Manager, Accountant, Sales | `refresh` re-confirms with the provider. |
+| POST | `/gateway/sweep` | Manager, Accountant | Poll everything in flight, retry everything unposted. Safe on a schedule. |
+| POST | `/gateway/payments/{id}/retry-posting` | Manager, Accountant | After a human resolved a `needs_review`. |
+| POST | `/gateway/payments/{id}/attach` | Manager, Accountant | Point an orphaned payment at its invoice. |
+
+A payment carries **two independent states**: `status` (`created → pending →
+succeeded / failed / expired`) answers "did the money move?", and
+`reconciliation` (`pending → posted / needs_review / not_applicable`) answers
+"did we book it?". They are separate because a payment can succeed while posting
+fails. An amount mismatch sets `needs_review` rather than posting an
+approximation.
+
+## Webhooks  `/api/webhooks`  — *public, tenant-scoped by host*
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/webhooks/payments/{provider}` | Provider callback. Always answers `200 {"received": true}`. |
+
+Unauthenticated by necessity — a provider cannot carry a user session — but
+nothing is trusted: the payload identifies a transaction and nothing more, and
+the status is **re-confirmed with the provider** before anything reaches the
+ledger. Deliveries are deduplicated, so a retry is a no-op. Always 200, because
+providers retry on any non-2xx and the body must not reveal which references
+exist. Full design: [payments.md](payments.md).
+
 ## Health  — *public*
 
 `GET /api/health` (liveness) · `GET /api/health/erpnext` (ERPNext reachability).

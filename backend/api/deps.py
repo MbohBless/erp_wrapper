@@ -18,7 +18,9 @@ from repositories.customer_repository import CustomerRepository
 from repositories.dashboard_repository import DashboardRepository
 from repositories.equipment_repository import EquipmentRepository
 from repositories.finance_repository import FinanceRepository
+from repositories.integration_repository import IntegrationRepository
 from repositories.maintenance_repository import MaintenanceRepository
+from repositories.payment_intent_repository import PaymentIntentRepository
 from repositories.payment_repository import PaymentRepository
 from repositories.product_repository import ProductRepository
 from repositories.purchase_repository import PurchaseRepository
@@ -28,6 +30,7 @@ from repositories.stock_repository import StockRepository
 from repositories.supplier_repository import SupplierRepository
 from repositories.user_repository import UserRepository
 from repositories.warehouse_repository import WarehouseRepository
+from repositories.webhook_event_repository import WebhookEventRepository
 from services.auth_service import AuthService
 from services.branding_service import BrandingService
 from services.company_service import CompanyService
@@ -35,8 +38,10 @@ from services.customer_service import CustomerService
 from services.dashboard_service import DashboardService
 from services.equipment_service import EquipmentService
 from services.finance_service import FinanceService
+from services.integration_service import IntegrationService
 from services.inventory_service import InventoryService
 from services.maintenance_service import MaintenanceService
+from services.payment_gateway_service import PaymentGatewayService
 from services.payment_service import PaymentService
 from services.product_service import ProductService
 from services.purchase_service import PurchaseService
@@ -123,6 +128,50 @@ def get_branding_service(
     repo: BrandingRepository = Depends(get_branding_repository),
 ) -> BrandingService:
     return BrandingService(repo)
+
+
+# --- Payment gateway --------------------------------------------------------
+# Straddles both stores: provider credentials, intents and webhook receipts live
+# in the app DB, while the Payment Entry it ultimately creates lives in ERPNext.
+def get_integration_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> IntegrationRepository:
+    return IntegrationRepository(db, tenant_id)
+
+
+def get_payment_intent_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> PaymentIntentRepository:
+    return PaymentIntentRepository(db, tenant_id)
+
+
+def get_webhook_event_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> WebhookEventRepository:
+    return WebhookEventRepository(db, tenant_id)
+
+
+def get_integration_service(
+    repo: IntegrationRepository = Depends(get_integration_repository),
+) -> IntegrationService:
+    return IntegrationService(repo)
+
+
+def get_payment_gateway_service(
+    integrations: IntegrationRepository = Depends(get_integration_repository),
+    intents: PaymentIntentRepository = Depends(get_payment_intent_repository),
+    events: WebhookEventRepository = Depends(get_webhook_event_repository),
+    client: ERPNextClient = Depends(get_erpnext_client),
+) -> PaymentGatewayService:
+    return PaymentGatewayService(
+        integrations=integrations,
+        intents=intents,
+        events=events,
+        payments=PaymentRepository(client),
+    )
 
 
 # --- ERPNext-backed service providers ---

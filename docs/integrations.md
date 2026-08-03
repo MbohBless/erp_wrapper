@@ -107,7 +107,7 @@ SYSCOHADA localization we already have — the thing global products do badly.
 | Add-on | Feature flag | Effort | Revenue model | Verdict |
 | --- | --- | --- | --- | --- |
 | E-invoicing / DGI | `einvoicing` | seam: days · impl: unknown | per tenant + per submission | **Build the seam now** |
-| Mobile money collections | `mobile_money` | 2–3 weeks | plan tier + % of volume | **Highest ROI** |
+| Mobile money collections | `mobile_money` | **built** | plan tier + metered per transaction | **Done — see [payments.md](payments.md)** |
 | WhatsApp delivery & dunning | `whatsapp` | 1–2 weeks | per tenant + metered messages | **Yes** |
 | Payroll (CNPS / IRPP) | `payroll` | 4–6 weeks | per employee / month | **Yes, phase 2** |
 | Bank statement import | `bank_import` | 1–2 weeks | included in a mid tier | Yes, cheap |
@@ -127,6 +127,13 @@ The highest-value item that is entirely within our control.
 | MTN MoMo | ~7M active | Collections + Disbursements API, sandbox → KYC → production keys | 0.5–1.5% merchant collection |
 | Orange Money | ~5M active | Web Payment / M Payment API; customer confirms with a USSD OTP | operator-negotiated |
 | Aggregators (CamPay, NotchPay, MeSomb, Monetbil, CinetPay, PayDunya) | both operators | one API, CMS plugins, local support | ~2–3.5% |
+
+> **Correction (August 2026):** the "% of volume" revenue model above does not
+> survive contact with the design. Because the tenant owns the merchant account
+> and we never touch the float — the only posture that avoids money-transmission
+> licensing — there is no volume to take a cut of. Charge a metered per-
+> transaction fee for the reconciliation, or negotiate a referral share with the
+> aggregator. See [payments.md](payments.md#the-rule-that-shapes-everything).
 
 **Recommendation: aggregator first, direct later.** One integration instead of
 two, and no separate merchant onboarding and KYC per operator. Revisit direct

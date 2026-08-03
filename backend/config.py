@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Encrypts tenant-held third-party credentials at rest (utils/crypto.py) —
+    # mobile-money API keys can move a customer's money, so they are never
+    # stored in the clear. Derived from jwt_secret_key when unset so a dev
+    # install works; set it explicitly in production, because rotating the JWT
+    # secret would otherwise make every stored credential unreadable.
+    secret_encryption_key: str = ""
+
     # --- Initial administrator (seeded on startup if it does not exist) ---
     first_admin_email: str = "admin@equimed.cm"
     first_admin_password: str = "admin12345"

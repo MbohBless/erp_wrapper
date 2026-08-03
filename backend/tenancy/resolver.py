@@ -24,6 +24,20 @@ from tenancy.context import TenantContext
 # is usually a tenant that is about to be provisioned.
 _NEGATIVE_TTL = 5.0
 
+# Everything a self-hosted install is entitled to — which is everything. There
+# is no plan to gate against when the customer runs the software themselves.
+SELF_HOSTED_FEATURES = frozenset(
+    {
+        "branding",
+        "dashboard_layout",
+        "custom_domain",
+        "reports",
+        "budget",
+        "dedicated_erp",
+        "mobile_money",
+    }
+)
+
 
 class TenantResolver(Protocol):
     async def resolve(self, host: str) -> TenantContext | None:
@@ -49,7 +63,10 @@ class StaticTenantResolver:
             erpnext_api_key=settings.erpnext_api_key,
             erpnext_api_secret=settings.erpnext_api_secret,
             # A self-hosted deployment has paid for everything it can run.
-            features=frozenset({"branding", "dashboard_layout", "reports", "budget"}),
+            # Keep in step with platform/api/models/plan.py::KNOWN_FEATURES —
+            # a capability missing here is silently unavailable to every
+            # self-hosted customer, which is a support ticket, not an error.
+            features=SELF_HOSTED_FEATURES,
         )
 
     async def resolve(self, host: str) -> TenantContext | None:  # noqa: ARG002

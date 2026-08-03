@@ -23,6 +23,7 @@ header, with a separate control plane in `platform/`).
 | Docker Compose, config, HTTPS, backups, ops | [docs/deployment.md](docs/deployment.md) |
 | Backend layering/style rules (authoritative) | [docs/coding_guidelines.md](docs/coding_guidelines.md) |
 | Tenancy, isolation, control plane, white-labelling | [docs/multi-tenancy.md](docs/multi-tenancy.md) |
+| Mobile money: providers, webhooks, reconciliation | [docs/payments.md](docs/payments.md) |
 | Add-on roadmap, payment/tax/messaging integrations | [docs/integrations.md](docs/integrations.md) |
 | Original V1 product brief | [docs/system-design.md](docs/system-design.md) |
 
@@ -35,8 +36,15 @@ in `/docs` (and the README if the index changes) in the same change.**
 - **ERPNext choke point:** only `backend/integrations/erpnext.py` may talk to
   ERPNext. Everything else goes through `ERPNextClient` / the domain wrappers.
   The frontend must never call ERPNext directly.
-- **Outbound HTTP is confined to `integrations/`.** Today that is `erpnext.py`
-  and `control_plane.py` — no `httpx` anywhere else in the backend.
+- **Outbound HTTP is confined to `integrations/`.** Today that is `erpnext.py`,
+  `control_plane.py` and `integrations/payments/*` — no `httpx` anywhere else.
+- **Payments: never hold customer funds.** Tenants supply their own merchant
+  credentials and money settles directly to them. Holding float would make this
+  a licensed money-transmission business under CEMAC rules.
+- **Payments: a webhook is a hint, never truth.** Nothing reaches the ledger on
+  the strength of a callback — always re-confirm via the provider's status API.
+  `tests/test_payment_gateway.py::test_a_lying_webhook_cannot_mark_an_invoice_paid`
+  pins this; a failure there is a security incident.
 - **Strict layers:** `api/` (thin routers, no business logic) → `services/`
   (business logic) → `repositories/` (data access, repository pattern) →
   `integrations/erpnext.py` or SQLAlchemy. Pydantic v2 in `schemas/`.

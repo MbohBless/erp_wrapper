@@ -91,3 +91,23 @@ class PaymentRepository:
         doc = await self.client.create_document(self.DOCTYPE, pe)
         submitted = await self.client.submit_document(self.DOCTYPE, doc.get("name"))
         return _from_erpnext(submitted or doc)
+
+    async def get_settlement_summary(self, doctype: str, name: str) -> dict:
+        """What is still owed on an invoice or bill, and who owes it.
+
+        Used by the payment gateway to default a collection to the outstanding
+        balance rather than the grand total — charging the full amount of a
+        partly-paid invoice is the obvious way to take money twice.
+        """
+        party_field = "customer" if doctype == "Sales Invoice" else "supplier"
+        doc = await self.client.get_document(doctype, name)
+        return {
+            "name": doc.get("name") or name,
+            "outstanding": _num(doc.get("outstanding_amount")),
+            "grand_total": _num(doc.get("grand_total")),
+            "currency": doc.get("currency") or "XAF",
+            "status": doc.get("status") or "",
+            "docstatus": doc.get("docstatus"),
+            "party_type": "Customer" if doctype == "Sales Invoice" else "Supplier",
+            "party": doc.get(party_field) or "",
+        }

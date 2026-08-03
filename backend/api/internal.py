@@ -21,7 +21,10 @@ from repositories.books_setup_repository import BooksSetupRepository
 from repositories.branding_repository import BrandingRepository
 from repositories.budget_repository import BudgetRepository
 from repositories.company_repository import CompanyRepository
+from repositories.integration_repository import IntegrationRepository
+from repositories.payment_intent_repository import PaymentIntentRepository
 from repositories.user_repository import UserRepository
+from repositories.webhook_event_repository import WebhookEventRepository
 from schemas.internal import TenantBootstrapIn, TenantBootstrapOut, TenantPurgeOut
 from utils.security import hash_password
 
@@ -104,4 +107,9 @@ def purge_tenant(tenant_id: str, db: Session = Depends(get_db)) -> TenantPurgeOu
     BooksSetupRepository(db, tenant_id).delete()
     CompanyRepository(db, tenant_id).delete()
     BrandingRepository(db, tenant_id).delete()
+    # Payment credentials must go with the workspace — leaving a tenant's
+    # mobile-money keys behind after offboarding is a live secret with no owner.
+    IntegrationRepository(db, tenant_id).delete_all()
+    PaymentIntentRepository(db, tenant_id).delete_all()
+    WebhookEventRepository(db, tenant_id).delete_all()
     return TenantPurgeOut(tenant_id=tenant_id, users_deleted=users_deleted)

@@ -9,6 +9,10 @@ SQLAlchemy==2.0.36
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 PyJWT==2.10.1
+# Direct dependency (utils/crypto.py seals tenant payment credentials at rest).
+# Floor rather than pin: pyHanko resolves a newer version and forcing it down
+# breaks PDF signing.
+cryptography>=44.0.0
 reportlab==4.2.5
 pyHanko==0.25.1
 Pillow==10.4.0

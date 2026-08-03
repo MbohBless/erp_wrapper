@@ -202,6 +202,8 @@ services:
       ROOT_PATH: /api
       DATABASE_URL: sqlite:////app/data/app.db
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
+      # Seals tenant mobile-money credentials at rest (utils/crypto.py).
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-}
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
       FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-admin@equimed.cm}
       FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-admin12345}

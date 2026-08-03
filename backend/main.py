@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from api.auth import router as auth_router
 from api.budget import router as budget_router
+from api.gateway import router as gateway_router
 from api.internal import router as internal_router
 from api.public import router as public_router
 from api.customers import router as customers_router
@@ -29,6 +30,7 @@ from api.sales import router as sales_router
 from api.settings import router as settings_router
 from api.setup import router as setup_router
 from api.suppliers import router as suppliers_router
+from api.webhooks import router as webhooks_router
 from api.users import router as users_router
 from config import settings
 from database import Base, SessionLocal, engine
@@ -37,6 +39,9 @@ from models.books_setup import BooksSetup  # noqa: F401 (register table)
 from models.branding import TenantBranding  # noqa: F401 (register table)
 from models.budget import Budget  # noqa: F401 (register table)
 from models.company_profile import CompanyProfile  # noqa: F401 (register table)
+from models.integration import TenantIntegrationConfig  # noqa: F401 (register table)
+from models.payment_intent import PaymentIntent  # noqa: F401 (register table)
+from models.webhook_event import WebhookEvent  # noqa: F401 (register table)
 from models.user import Role, User
 from repositories.branding_repository import BrandingRepository
 from repositories.company_repository import CompanyRepository
@@ -210,6 +215,8 @@ def create_app(resolver: TenantResolver | None = None) -> FastAPI:
     app.include_router(reports_router)
     app.include_router(setup_router)
     app.include_router(budget_router)
+    app.include_router(gateway_router)
+    app.include_router(webhooks_router)
     return app
 
 
