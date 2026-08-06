@@ -125,15 +125,22 @@ services:
 
   # ==========================================================================
   # Control plane — SaaS only (`--profile saas`)
+  #
+  # NOTE: Compose interpolates every service regardless of profile, so these
+  # variables must be set even for a single-tenant deploy that never starts
+  # the control plane. scripts/deploy.sh generates them all; if you are
+  # hand-writing .env, generate them anyway — they cost nothing unused, and
+  # having them present means switching to the SaaS plane later is a profile
+  # flag rather than a secrets scramble.
   # ==========================================================================
   platform-api:
     <<: [*logging, *restart]
     environment:
-      JWT_SECRET_KEY: ${PLATFORM_JWT_SECRET_KEY:?set PLATFORM_JWT_SECRET_KEY (must differ from JWT_SECRET_KEY)}
+      JWT_SECRET_KEY: ${PLATFORM_JWT_SECRET_KEY:?set PLATFORM_JWT_SECRET_KEY (must differ from JWT_SECRET_KEY; needed even single-tenant — see note above)}
       SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY}
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN (shared with the tenant app)}
-      FIRST_OWNER_PASSWORD: ${FIRST_OWNER_PASSWORD:?set FIRST_OWNER_PASSWORD}
-      CORS_ORIGINS: ${PLATFORM_CORS_ORIGINS:?set PLATFORM_CORS_ORIGINS, e.g. ["https://console.example.com"]}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN (shared with the tenant app; needed even single-tenant)}
+      FIRST_OWNER_PASSWORD: ${FIRST_OWNER_PASSWORD:?set FIRST_OWNER_PASSWORD (needed even single-tenant)}
+      CORS_ORIGINS: ${PLATFORM_CORS_ORIGINS:?set PLATFORM_CORS_ORIGINS, e.g. ["https://console.example.com"] (needed even single-tenant)}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
       interval: 30s
