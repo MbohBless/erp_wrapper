@@ -1,0 +1,29 @@
+# Opt-in overlay: expose the ERPNext desk on the server's LOOPBACK only.
+#
+# Needed for first-time setup — the ERPNext setup wizard and Custom Field
+# creation happen in the desk UI, which the production overlay deliberately
+# makes unreachable.
+#
+#   On the server, with the production overlay already active:
+#     docker compose -f docker-compose.yml \
+#                    -f docker-compose.prod.yml \
+#                    -f docker-compose.desk.yml up -d erpnext-nginx
+#
+#   From your laptop:
+#     ssh -L 8080:127.0.0.1:8080 ERPNextBase
+#     open http://localhost:8080
+#
+#   When finished, put it back:
+#     docker compose up -d erpnext-nginx     # COMPOSE_FILE in .env excludes this file
+#
+# `127.0.0.1:` in the mapping is the whole point. Without it Docker binds
+# 0.0.0.0 and the desk is on the public internet — and note that Docker
+# publishes ports by writing iptables rules that BYPASS ufw, so a host
+# firewall would not save you. The bind address is the actual control.
+services:
+  erpnext-nginx:
+    # !override, not an append: the production overlay sets `ports: []`, and
+    # Compose merges list fields by appending, so without this the two would
+    # combine rather than replace.
+    ports: !override
+      - "127.0.0.1:8080:8080"
