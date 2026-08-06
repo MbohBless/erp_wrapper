@@ -100,6 +100,72 @@ Generate each secret with `openssl rand -hex 32`. They must be different values.
    *ERPNext custom fields*) on Customer, Supplier, Item, Serial No and
    Maintenance Visit DocTypes.
 
+## Production deployment
+
+Use the **production overlay** rather than the base file alone:
+
+```bash
+# In .env — so the flags cannot be forgotten:
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+
+docker compose up -d --build                 # single-tenant
+docker compose --profile saas up -d --build  # SaaS plane
+```
+
+Requires **Compose v2.24+** — the overlay uses the `!override` merge tag.
+
+What `docker-compose.prod.yml` changes:
+
+| | Base file | Production overlay |
+| --- | --- | --- |
+| Secrets | weak defaults (`admin`, `CHANGE_ME`) | **required** — compose refuses to start without them |
+| ERPNext desk | published on `:8080` | unpublished; reachable only via Caddy |
+| CORS | `["*"]` | must be set to real origins |
+| Restart policy | `unless-stopped` | `always` (survives host reboot) |
+| Logs | unbounded | rotated at 10 MB × 3 |
+| Memory | unbounded | per-service limits |
+| Health checks | ERPNext only | + backend and control plane |
+| Caddy | `${HTTP_PORT}` | `:80`, `:443`, `:443/udp` (ACME + HTTP/3) |
+
+The failure-loudly behaviour is the point. A missing secret produces:
+
+```
+required variable JWT_SECRET_KEY is missing a value:
+  set JWT_SECRET_KEY (openssl rand -hex 32)
+```
+
+rather than a stack that boots on `CHANGE_ME_IN_PRODUCTION` and looks fine.
+
+> **Why `!override` matters.** Compose *appends* to list fields such as `ports`
+> when merging files, so a plain `ports: []` is silently a no-op and the ERPNext
+> desk stays exposed. The overlay uses `ports: !override []`. If you ever
+> downgrade Compose below 2.24, check `docker compose config` and confirm
+> `erpnext-nginx` has no published port before exposing the host.
+
+### Before first boot on a public host
+
+```bash
+for v in JWT_SECRET_KEY SECRET_ENCRYPTION_KEY PLATFORM_JWT_SECRET_KEY INTERNAL_API_TOKEN; do
+  echo "$v=$(openssl rand -hex 32)"
+done   # paste into .env — they must all differ
+```
+
+- [ ] Point DNS at the host; set the real domain in `caddy/Caddyfile`
+      (single-tenant) or `BASE_DOMAIN` + `PLATFORM_DOMAIN` (SaaS).
+- [ ] Firewall: allow 80/443 only. Nothing else needs to be reachable.
+- [ ] Change `ADMIN_PASSWORD` (ERPNext) and `FIRST_ADMIN_PASSWORD`, then log in
+      once and change them again from the UI.
+- [ ] `docker compose config | grep -c published` — expect only Caddy's ports.
+- [ ] Schedule `scripts/backup.sh` and copy backups **off** the host.
+
+### Known constraint: SQLite
+
+The app database is still SQLite on a volume. That is fine for a single-tenant
+install and for a SaaS pilot, but SQLite serialises writes, so it will become
+the bottleneck — and a risk — under real multi-tenant load. Moving
+`DATABASE_URL` to PostgreSQL is the next infrastructure step; it needs a driver
+added and Alembic introduced first (see the note below).
+
 ## Production notes
 
 - **HTTPS (single-tenant):** replace `:80` in `caddy/Caddyfile` with your real
