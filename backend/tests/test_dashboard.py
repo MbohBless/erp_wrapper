@@ -122,3 +122,78 @@ def test_dashboard_endpoint(client, admin_token):
 
 def test_dashboard_requires_auth(client):
     assert client.get("/dashboard").status_code == 401
+
+
+# --- Panel detail comes from ERPNext, never from placeholders ---------------
+# The low-stock and expiring panels used to render hardcoded sample rows
+# ("Insulin Glargine 100IU", "Batch MET-7781"), which is indistinguishable from
+# real data to someone looking at their own dashboard. These pin the real
+# sources and the empty case.
+
+PANEL_DATA = {
+    **DATA,
+    "Batch": [
+        {"name": "B-1", "batch_id": "B-1", "item": "THERMO-001",
+         "expiry_date": "2026-08-10", "batch_qty": 40},
+        {"name": "B-2", "batch_id": "B-2", "item": "GLOVE-001",
+         "expiry_date": "2026-12-01", "batch_qty": 900},
+    ],
+    "Item": [
+        {"name": "THERMO-001", "item_name": "Digital Thermometer"},
+        {"name": "GLOVE-001", "item_name": "Nitrile Gloves"},
+    ],
+    "Customer": [
+        {"name": "Clinic A", "customer_group": "Clinics"},
+        {"name": "Clinic B", "customer_group": "Hospitals"},
+    ],
+}
+
+
+async def _summary(data):
+    return await DashboardRepository(DashboardStub(data)).get_summary(AS_OF)
+
+
+async def test_low_stock_rows_come_from_bins():
+    summary = await _summary(PANEL_DATA)
+    assert [i.item_code for i in summary.low_stock_items] == ["THERMO-001"]
+    item = summary.low_stock_items[0]
+    assert item.item_name == "Digital Thermometer"  # resolved, not the raw code
+    assert item.actual_qty == 3
+    assert item.warehouse == "Main"
+
+
+async def test_expiring_batches_come_from_batch_doctype():
+    summary = await _summary(PANEL_DATA)
+    assert [b.batch_id for b in summary.expiring_batches] == ["B-1", "B-2"]
+    soonest = summary.expiring_batches[0]
+    assert soonest.item_name == "Digital Thermometer"
+    assert soonest.days_left == 17  # 2026-07-24 -> 2026-08-10
+    assert soonest.qty == 40
+
+
+async def test_revenue_segments_are_computed_from_invoices():
+    summary = await _summary(PANEL_DATA)
+    by_label = {s.label: s for s in summary.revenue_by_segment}
+    # SI-1 10000 to Clinics, SI-2 5000 to Hospitals -> 66.7 / 33.3 of 15000.
+    assert by_label["Clinics"].pct == 66.7
+    assert by_label["Hospitals"].pct == 33.3
+    assert sum(s.amount for s in summary.revenue_by_segment) == 15000
+    assert summary.top_customer.label == "Clinic A"
+    assert summary.top_customer.amount == 10000
+
+
+async def test_panels_are_empty_when_there_is_no_data():
+    """An empty workspace shows nothing — not sample rows."""
+    summary = await _summary({})
+    assert summary.low_stock_items == []
+    assert summary.expiring_batches == []
+    assert summary.revenue_by_segment == []
+    assert summary.top_customer is None
+
+
+def test_dashboard_endpoint_exposes_the_panel_fields(client, admin_token, fake_erpnext):
+    resp = client.get("/dashboard", headers=auth_header(admin_token))
+    assert resp.status_code == 200
+    body = resp.json()
+    for field in ("low_stock_items", "expiring_batches", "revenue_by_segment"):
+        assert field in body, f"{field} missing from the dashboard payload"

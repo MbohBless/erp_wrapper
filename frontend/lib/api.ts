@@ -13,6 +13,29 @@ export type ActivityItem = {
   date: string | null;
 };
 
+export type LowStockItem = {
+  item_code: string;
+  item_name: string | null;
+  warehouse: string;
+  actual_qty: number;
+  threshold: number;
+};
+
+export type ExpiringBatch = {
+  batch_id: string;
+  item_code: string;
+  item_name: string | null;
+  qty: number | null;
+  expiry_date: string;
+  days_left: number;
+};
+
+export type RevenueSegment = {
+  label: string;
+  amount: number;
+  pct: number;
+};
+
 export type DashboardSummary = {
   revenue_today: number;
   outstanding_customers: number;
@@ -21,6 +44,10 @@ export type DashboardSummary = {
   low_stock_count: number;
   revenue_trend: TrendPoint[];
   recent_activity: ActivityItem[];
+  low_stock_items: LowStockItem[];
+  expiring_batches: ExpiringBatch[];
+  revenue_by_segment: RevenueSegment[];
+  top_customer: RevenueSegment | null;
 };
 
 export const getDashboard = (token: string) =>

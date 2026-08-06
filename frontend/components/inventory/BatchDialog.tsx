@@ -63,7 +63,7 @@ export default function BatchDialog({
       >
         <div>
           <label className={LABEL}>{t("inventory.batchNumber")} *</label>
-          <input className={FIELD} value={batchId} onChange={(e) => setBatchId(e.target.value)} required placeholder="MET-7781" />
+          <input className={FIELD} value={batchId} onChange={(e) => setBatchId(e.target.value)} required placeholder="BATCH-001" />
         </div>
         <div>
           <label className={LABEL}>{t("inventory.batchProduct")} *</label>

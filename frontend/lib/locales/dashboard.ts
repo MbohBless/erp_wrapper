@@ -49,6 +49,9 @@ export const dashboard = {
     "dashboard.trend": "Trend",
     "dashboard.salesRevenue": "Sales & Revenue",
     "dashboard.noRevenue": "No revenue recorded in this period.",
+    "dashboard.noSegments": "No invoiced revenue to break down yet.",
+    "dashboard.noLowStock": "Every item is above its threshold.",
+    "dashboard.noExpiring": "No batches expiring in the next 6 months.",
   },
   fr: {
     "dashboard.title": "Tableau de bord",
@@ -93,5 +96,8 @@ export const dashboard = {
     "dashboard.trend": "Tendance",
     "dashboard.salesRevenue": "Ventes & chiffre d'affaires",
     "dashboard.noRevenue": "Aucun chiffre d'affaires enregistré sur cette période.",
+    "dashboard.noSegments": "Aucun chiffre d'affaires facturé à répartir.",
+    "dashboard.noLowStock": "Tous les articles sont au-dessus de leur seuil.",
+    "dashboard.noExpiring": "Aucun lot n'expire dans les 6 prochains mois.",
   },
 };

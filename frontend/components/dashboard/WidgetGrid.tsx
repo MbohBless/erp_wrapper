@@ -30,17 +30,40 @@ const SPAN_CLASS: Record<number, string> = {
   4: "sm:col-span-2 xl:col-span-4",
 };
 
-// Illustrative rows for panels without an item-level endpoint yet.
-const LOW_STOCK: ListRow[] = [
-  { title: "Insulin Glargine 100IU", meta: "Cold Room A · reorder at 150", value: "88", valueClass: "text-err" },
-  { title: "Salbutamol Inhaler", meta: "WH Yaoundé · reorder at 300", value: "210", valueClass: "text-warn" },
-  { title: "Paracetamol 1g Injection", meta: "WH Yaoundé · reorder at 400", value: "320", valueClass: "text-warn" },
-];
-const EXPIRING: ListRow[] = [
-  { title: "Metformin 850mg", meta: "Batch MET-7781 · 1,900 units", value: "", tag: { text: "34 days", className: "bg-[color-mix(in_srgb,var(--err-raw)_15%,transparent)] text-err" } },
-  { title: "Artemether/Lumefantrine", meta: "Batch ACT-9901 · 12,400 units", value: "", tag: { text: "2 months", className: "bg-[color-mix(in_srgb,var(--warn-raw)_16%,transparent)] text-warn" } },
-  { title: "Amoxicillin 500mg", meta: "Batch AMX-2409 · 4,200 units", value: "", tag: { text: "5 months", className: "bg-[color-mix(in_srgb,var(--warn-raw)_16%,transparent)] text-warn" } },
-];
+const nf = new Intl.NumberFormat("en-GB");
+
+/** Low-stock bins, straight from ERPNext. Empty is a real answer. */
+function lowStockRows(data: DashboardSummary): ListRow[] {
+  return (data.low_stock_items ?? []).map((it) => ({
+    title: it.item_name || it.item_code,
+    meta: `${it.warehouse} · at or below ${nf.format(it.threshold)}`,
+    value: nf.format(it.actual_qty),
+    // Out of stock is a different problem from running low; say so in colour.
+    valueClass: it.actual_qty <= 0 ? "text-err" : "text-warn",
+  }));
+}
+
+/** Batches with a real expiry date inside the horizon. */
+function expiringRows(data: DashboardSummary): ListRow[] {
+  return (data.expiring_batches ?? []).map((b) => {
+    const urgent = b.days_left <= 30;
+    const label =
+      b.days_left <= 60
+        ? `${b.days_left} day${b.days_left === 1 ? "" : "s"}`
+        : `${Math.round(b.days_left / 30)} months`;
+    return {
+      title: b.item_name || b.item_code,
+      meta: `Batch ${b.batch_id}${b.qty != null ? ` · ${nf.format(b.qty)} units` : ""}`,
+      value: "",
+      tag: {
+        text: label,
+        className: urgent
+          ? "bg-[color-mix(in_srgb,var(--err-raw)_15%,transparent)] text-err"
+          : "bg-[color-mix(in_srgb,var(--warn-raw)_16%,transparent)] text-warn",
+      },
+    };
+  });
+}
 
 function revenueDelta(data: DashboardSummary): Delta | undefined {
   const trend = data.revenue_trend;
@@ -116,8 +139,16 @@ export default function WidgetGrid({
           />
         );
       case "chart.segment_mix":
-        return <SegmentMix viz={(w.viz as MixViz) || "progress"} title={w.title} />;
-      case "list.low_stock":
+        return (
+          <SegmentMix
+            viz={(w.viz as MixViz) || "progress"}
+            title={w.title}
+            segments={data.revenue_by_segment ?? []}
+            topCustomer={data.top_customer}
+          />
+        );
+      case "list.low_stock": {
+        const rows = lowStockRows(data);
         return (
           <ListPanel
             title={
@@ -125,19 +156,24 @@ export default function WidgetGrid({
               `${t("dashboard.lowStock")}${data.low_stock_count ? ` · ${data.low_stock_count}` : ""}`
             }
             dotColor="var(--warn)"
-            rows={LOW_STOCK}
-            action={t("dashboard.viewAll")}
+            rows={rows}
+            emptyText={t("dashboard.noLowStock")}
+            action={rows.length ? t("dashboard.viewAll") : undefined}
           />
         );
-      case "list.expiring":
+      }
+      case "list.expiring": {
+        const rows = expiringRows(data);
         return (
           <ListPanel
             title={w.title || t("dashboard.expiringSoon")}
             dotColor="var(--err)"
-            rows={EXPIRING}
-            action={t("dashboard.viewAll")}
+            rows={rows}
+            emptyText={t("dashboard.noExpiring")}
+            action={rows.length ? t("dashboard.viewAll") : undefined}
           />
         );
+      }
       case "table.recent_sales":
         return <RecentSales items={data.recent_activity} />;
       case "feed.activity":
