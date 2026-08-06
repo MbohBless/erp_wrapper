@@ -144,13 +144,32 @@ echo "building and starting (first run pulls several GB and can take 10+ minutes
 docker compose up -d --build
 
 echo
-echo "waiting for the site to be created…"
+echo "waiting for the site to be created (first run installs ERPNext — several minutes)…"
 # The one-shot site creator must finish before the app is usable.
-for _ in $(seq 1 120); do
-  state=$(docker compose ps --format json erpnext-create-site 2>/dev/null | head -1 || true)
-  echo "$state" | grep -q '"exited"' && break
+#
+# `-a` is load-bearing: `docker compose ps` lists only RUNNING containers, so a
+# one-shot that has already exited vanishes from the output entirely. Without
+# it the exit is never observed and this loop burns its full timeout on a
+# deploy that actually succeeded.
+SITE_OK=0
+for _ in $(seq 1 180); do
+  line=$(docker compose ps -a --format json erpnext-create-site 2>/dev/null | head -1 || true)
+  if [ -z "$line" ]; then
+    warn "site-creation container not found; continuing"
+    break
+  fi
+  case "$line" in
+    *'"State":"exited"'*)
+      case "$line" in
+        *'"ExitCode":0'*) SITE_OK=1 ;;
+        *) warn "site creation exited non-zero — check: docker compose logs erpnext-create-site" ;;
+      esac
+      break
+      ;;
+  esac
   sleep 10
 done
+[ "$SITE_OK" -eq 1 ] && ok "ERPNext site created"
 
 echo
 echo "waiting for the backend to report healthy…"
