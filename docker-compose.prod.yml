@@ -1,0 +1,168 @@
+# Production overlay for docker-compose.yml.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# or, better, put this in .env so the flags cannot be forgotten:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+#
+# then plain `docker compose up -d` picks up both. Forgetting the second -f is
+# the classic way to run a "production" stack on development defaults, so the
+# COMPOSE_FILE route is the one documented in docs/deployment.md.
+#
+# What this overlay changes versus the base file:
+#
+#   1. Secrets are REQUIRED. `${VAR:?message}` makes compose refuse to start
+#      with a clear error rather than silently booting on `admin`/`CHANGE_ME`.
+#      This is the single most valuable thing in the file.
+#   2. ERPNext's port is unpublished. In the base file :8080 is exposed for
+#      convenience; in production the desk is reachable only through Caddy.
+#   3. Logs are rotated. Without this, container logs fill the disk and take
+#      the whole stack down — the most common self-inflicted VPS outage.
+#   4. Memory limits, so one runaway service degrades instead of OOM-killing
+#      MariaDB and corrupting data.
+#   5. Health checks on the app tier, so `docker compose ps` tells the truth.
+#   6. `restart: always` rather than `unless-stopped`, so a host reboot brings
+#      everything back without a human.
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-restart: &restart
+  restart: always
+
+services:
+  # ==========================================================================
+  # Data stores
+  # ==========================================================================
+  db:
+    <<: [*logging, *restart]
+    environment:
+      # No default. A MariaDB root password of "admin" on a public VM is a
+      # matter of time, not risk.
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+      # ERPNext is the memory hog in this stack; cap the buffer pool so it
+      # cannot starve everything else on a small VM.
+      - --innodb-buffer-pool-size=${DB_BUFFER_POOL:-512M}
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEM_LIMIT:-1500m}
+
+  redis-cache:
+    <<: [*logging, *restart]
+  redis-queue:
+    <<: [*logging, *restart]
+
+  # ==========================================================================
+  # ERPNext / Frappe
+  # ==========================================================================
+  erpnext-backend:
+    <<: [*logging, *restart]
+    deploy:
+      resources:
+        limits:
+          memory: ${ERPNEXT_MEM_LIMIT:-1500m}
+
+  erpnext-websocket:
+    <<: [*logging, *restart]
+  erpnext-scheduler:
+    <<: [*logging, *restart]
+  erpnext-queue-short:
+    <<: [*logging, *restart]
+  erpnext-queue-long:
+    <<: [*logging, *restart]
+
+  erpnext-nginx:
+    <<: [*logging, *restart]
+    # Unpublish the desk: ERPNext is reachable only from inside the compose
+    # network (and through Caddy, if the Caddyfile routes to it).
+    #
+    # `!override` is load-bearing. Compose *appends* to list fields like
+    # `ports` when merging files, so a plain `ports: []` is silently a no-op
+    # and :8080 stays open to the internet. Requires Compose v2.24+.
+    ports: !override []
+
+  # ==========================================================================
+  # Application layer
+  # ==========================================================================
+  backend:
+    <<: [*logging, *restart]
+    environment:
+      # Every one of these is fatal-if-unset in production.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY (openssl rand -hex 32)}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY (openssl rand -hex 32)}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:?set FIRST_ADMIN_PASSWORD}
+      # Lock CORS to the real origins. '["*"]' with credentials allowed is a
+      # development convenience that should never reach a public host.
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS, e.g. ["https://erp.example.com"]}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=4).status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: ${BACKEND_MEM_LIMIT:-512m}
+
+  frontend:
+    <<: [*logging, *restart]
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEM_LIMIT:-512m}
+
+  # ==========================================================================
+  # Control plane — SaaS only (`--profile saas`)
+  # ==========================================================================
+  platform-api:
+    <<: [*logging, *restart]
+    environment:
+      JWT_SECRET_KEY: ${PLATFORM_JWT_SECRET_KEY:?set PLATFORM_JWT_SECRET_KEY (must differ from JWT_SECRET_KEY)}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN (shared with the tenant app)}
+      FIRST_OWNER_PASSWORD: ${FIRST_OWNER_PASSWORD:?set FIRST_OWNER_PASSWORD}
+      CORS_ORIGINS: ${PLATFORM_CORS_ORIGINS:?set PLATFORM_CORS_ORIGINS, e.g. ["https://console.example.com"]}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLATFORM_MEM_LIMIT:-384m}
+
+  platform-ui:
+    <<: [*logging, *restart]
+    deploy:
+      resources:
+        limits:
+          memory: ${PLATFORM_UI_MEM_LIMIT:-384m}
+
+  # ==========================================================================
+  # Reverse proxy
+  # ==========================================================================
+  caddy:
+    <<: [*logging, *restart]
+    # Real certificates need both ports reachable from the internet: :80 for
+    # the ACME HTTP challenge and the HTTPS redirect, :443 for traffic.
+    # `!override` so these replace the base file's ${HTTP_PORT} mapping rather
+    # than being appended alongside it.
+    ports: !override
+      - "80:80"
+      - "443:443"
+      # HTTP/3. Harmless if the host firewall drops it.
+      - "443:443/udp"
