@@ -42,7 +42,13 @@
 	# /api/health reaches the backend as /health (FastAPI uses root_path=/api
 	# so its OpenAPI docs at /api/docs stay correct).
 	handle_path /api/* {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			# Set X-Forwarded-For to the RESOLVED client, not the append chain.
+			# trusted_proxies makes {http.request.client_ip} the real visitor
+			# (from CF-Connecting-IP); left to default, Caddy appends the
+			# immediate peer and uvicorn reads Cloudflare's edge IP instead.
+			header_up X-Forwarded-For {http.request.client_ip}
+		}
 	}
 
 	# Everything else -> Next.js.
