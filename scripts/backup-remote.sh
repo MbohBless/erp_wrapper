@@ -97,7 +97,12 @@ docker compose exec -T erpnext-backend bench --site "$SITE" backup --with-files 
   || die "bench backup failed for '$SITE'"
 
 # bench writes into the site's private/backups; take the newest of each kind.
-BDIR="sites/${SITE}/private/backups"
+#
+# The path must be ABSOLUTE. `bench` reports paths relative to its working
+# directory, but `docker compose cp` resolves against the container root, so a
+# relative path fails with "could not find the file".
+BENCH_ROOT=$(docker compose exec -T erpnext-backend sh -c 'pwd' | tr -d '\r')
+BDIR="${BENCH_ROOT}/sites/${SITE}/private/backups"
 newest() { docker compose exec -T erpnext-backend sh -c "ls -1t ${BDIR}/*${1} 2>/dev/null | head -1" | tr -d '\r'; }
 DB_REMOTE=$(newest "database.sql.gz")
 [ -n "$DB_REMOTE" ] || die "no database dump produced"
