@@ -145,8 +145,11 @@ NOISY_TABLES='tabScheduled Job Log|tabScheduled Job Type|tabError Log|tabActivit
 strip_noise() {
   awk -v noisy="$NOISY_TABLES" '
     /^-- Dumping data for table/ {
-      tbl = $0
-      sub(/^.*`/, "", tbl); sub(/`.*$/, "", tbl)
+      # Split on the backtick rather than sub(/^.*`/) — `.*` is greedy and
+      # matches through the LAST backtick, yielding an empty table name and a
+      # filter that silently passes everything. That bug shipped once already.
+      n = split($0, a, "`")
+      tbl = (n >= 2 ? a[2] : "")
       skip = (tbl ~ "^(" noisy ")$")
     }
     !skip
