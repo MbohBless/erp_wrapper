@@ -156,7 +156,8 @@ done   # paste into .env — they must all differ
 - [ ] Change `ADMIN_PASSWORD` (ERPNext) and `FIRST_ADMIN_PASSWORD`, then log in
       once and change them again from the UI.
 - [ ] `docker compose config | grep -c published` — expect only Caddy's ports.
-- [ ] Schedule `scripts/backup.sh` and copy backups **off** the host.
+- [ ] Schedule `scripts/backup-remote.sh` (off-site to R2) and store `BACKUP_ENCRYPTION_KEY` in a password manager.
+- [ ] Rehearse a restore with `scripts/restore.sh --latest --dry-run`.
 
 ### Known constraint: SQLite
 
@@ -196,9 +197,75 @@ In `single` mode this backs up `SITE_NAME`. In `multi` mode it **enumerates ever
 site on the bench**, so onboarding a customer cannot silently leave them out of
 the rotation.
 
-Schedule via host cron, e.g. `0 2 * * * /path/to/Equimed/scripts/backup.sh`.
 Also snapshot the Docker volumes (`db-data`, `sites`, `backend-data`, and
 `platform-data` on the SaaS plane) — a backup on the same disk is not a backup.
+
+### Off-site backups (Cloudflare R2)
+
+`scripts/backup-remote.sh` bundles the ERPNext dump, attachments and the app
+database, encrypts the bundle, and uploads it to R2.
+
+```bash
+./scripts/backup-remote.sh            # back up if anything changed
+./scripts/backup-remote.sh --force    # upload regardless
+./scripts/backup-remote.sh --list     # what is stored off-site
+```
+
+Required in `.env`: `R2_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, `BACKUP_ENCRYPTION_KEY`. Optional: `R2_PREFIX`
+(default `equimed`), `BACKUP_KEEP` (default 10). Needs rclone **1.59+** —
+distro packages are often older and fail with `501 Not Implemented`, because
+R2 does not support the streaming upload older versions use.
+
+**`BACKUP_ENCRYPTION_KEY` is not recoverable.** Bundles are encrypted before
+they leave the host, so losing the key loses every backup. Store it in a
+password manager, not only on the server. `.env` is deliberately *not* included
+in the bundle: secrets do not belong in the same bucket as the data they
+protect.
+
+**Change detection.** Uploads are skipped when nothing has changed, keyed on a
+hash of the dump. The hash deliberately ignores `tabScheduled Job Log`,
+`tabScheduled Job Type` and the error/activity/session tables: ERPNext's
+scheduler writes to them continuously, so including them means the backup
+"changed" on every run and de-duplication never fires. Those tables are still
+present in the backup — they just do not count as a change.
+
+### Restoring
+
+```bash
+./scripts/restore.sh --list                 # what is available
+./scripts/restore.sh --latest --dry-run     # verify a bundle, change nothing
+./scripts/restore.sh --latest               # restore (destructive; asks to confirm)
+```
+
+A restore drops and reloads the site database, so it requires typing the site
+name and takes a safety copy of the current state first.
+
+Verify the restore path rather than assuming it: load a bundle into a scratch
+database and compare row counts against live.
+
+```bash
+gunzip -c erpnext-database.sql.gz | mariadb -uroot -p"$DB_ROOT_PASSWORD" verify_restore
+```
+
+### Scheduling
+
+```cron
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+30 2 * * * flock -n /var/lock/equimed-backup.lock /opt/equimed/scripts/backup-remote.sh >> /var/log/equimed-backup.log 2>&1
+30 3 * * 0 flock -n /var/lock/equimed-backup.lock /opt/equimed/scripts/restore.sh --latest --dry-run >> /var/log/equimed-backup.log 2>&1
+```
+
+Set `PATH` explicitly — cron's default omits `/usr/local/bin`. `flock -n` skips
+a run rather than stacking a second dump on one that overran. The weekly
+dry-run is a restore rehearsal: a backup nobody has restored is a hypothesis.
+
+Test cron jobs in a stripped environment, not an interactive shell, since that
+is where they differ:
+
+```bash
+env -i HOME=/root PATH=/usr/sbin:/usr/bin:/sbin:/bin /bin/sh -c '<the cron command>'
+```
 
 ## Operations
 
