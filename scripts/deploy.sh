@@ -181,6 +181,14 @@ for _ in $(seq 1 60); do
   sleep 5
 done
 
+# Recreating containers clears DOCKER-USER, so restore the origin lockdown if
+# it is configured on this host.
+if systemctl is-enabled equimed-cf-firewall.service >/dev/null 2>&1; then
+  ./scripts/refresh-cloudflare-ips.sh --firewall >/dev/null 2>&1 \
+    && ok "Cloudflare-only rules reasserted" \
+    || warn "could not reassert Cloudflare-only firewall rules"
+fi
+
 echo
 docker compose ps
 echo
