@@ -33,14 +33,35 @@ print(f"  Caddyfile updated ({len(ranges.split())} ranges)")
 PY
 
 if [ "${1:-}" = "--firewall" ]; then
-  command -v ufw >/dev/null || { echo "ufw not installed" >&2; exit 1; }
-  echo "  rewriting ufw rules for 80/443…"
-  # Drop existing 80/443 rules (highest number first so indices stay valid).
-  ufw status numbered | grep -E '(^\[.*\] )(80|443)/tcp' | grep -oE '^\[[ 0-9]+\]' \
-    | tr -d '[] ' | sort -rn | while read -r n; do yes | ufw delete "$n" >/dev/null; done
-  for cidr in $ALL; do
-    ufw allow proto tcp from "$cidr" to any port 80,443 >/dev/null
+  # Rules go in DOCKER-USER, NOT ufw.
+  #
+  # Docker publishes a port by writing its own netfilter rules, and packets to
+  # a container are FORWARDed — they never traverse ufw's INPUT chain. A ufw
+  # rule for 80/443 therefore looks correct, reports correct in `ufw status`,
+  # and blocks nothing. DOCKER-USER is the chain Docker consults first and the
+  # one intended for exactly this.
+  command -v iptables >/dev/null || { echo "iptables not available" >&2; exit 1; }
+  EXT=$(ip -4 route show default | awk '{print $5}' | head -1)
+  [ -n "$EXT" ] || { echo "could not determine the external interface" >&2; exit 1; }
+  TAG="equimed-cf"
+
+  echo "  applying DOCKER-USER rules on ${EXT}…"
+  # Drop our previous rules (identified by comment) so this is idempotent.
+  while n=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -F "$TAG" | head -1 | awk '{print $1}'); [ -n "$n" ]; do
+    iptables -D DOCKER-USER "$n"
   done
-  echo "  ufw now allows 80/443 from Cloudflare only (SSH untouched)"
-  ufw status | head -3
+
+  # Cloudflare first...
+  for cidr in $V4; do
+    iptables -A DOCKER-USER -i "$EXT" -s "$cidr" -p tcp -m multiport --dports 80,443 \
+      -m comment --comment "$TAG" -j RETURN
+  done
+  # ...then drop everything else aimed at the published web ports. Anything not
+  # matching falls through to DOCKER-USER's implicit RETURN, so container-to-
+  # container and outbound traffic are untouched.
+  iptables -A DOCKER-USER -i "$EXT" -p tcp -m multiport --dports 80,443 \
+    -m comment --comment "$TAG" -j DROP
+
+  echo "  DOCKER-USER now has $(iptables -L DOCKER-USER -n | tail -n +3 | grep -c .) rule(s)"
+  echo "  80/443 reachable from Cloudflare only; SSH untouched"
 fi

@@ -1,0 +1,19 @@
+# Reapply the Cloudflare-only rules for the published web ports after boot.
+#
+# Docker rebuilds its netfilter chains when the daemon starts, so rules added
+# by hand can be lost on reboot. This runs after docker.service and puts them
+# back — without it the origin quietly becomes world-reachable again after a
+# restart, which is the kind of regression nobody notices.
+[Unit]
+Description=EquiMed: restrict published web ports to Cloudflare
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/equimed
+ExecStart=/opt/equimed/scripts/refresh-cloudflare-ips.sh --firewall
+
+[Install]
+WantedBy=multi-user.target
