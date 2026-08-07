@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     root_path: str = "/api"
     cors_origins: list[str] = ["*"]
 
+    # --- Brand defaults --------------------------------------------------
+    # What the product calls itself before a tenant customises it in Settings.
+    # Env-configurable so a self-hosted or dedicated install shows the right
+    # name from first boot, with no database edit. A tenant's saved branding
+    # always wins over these.
+    brand_app_name: str = "EquiMed"
+    brand_short_name: str = ""          # falls back to brand_app_name
+    brand_tagline: str = "Distribution Suite"
+
     # --- Tenancy ---------------------------------------------------------
     # "single": self-hosted / dedicated instance. One implicit tenant, no
     #           control plane, ERPNext coordinates come from this file.

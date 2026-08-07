@@ -41,11 +41,18 @@ export type Branding = {
   default_theme: "light" | "dark" | "system";
 };
 
+/**
+ * Fallback used only until `/public/branding` answers, or if it fails.
+ *
+ * Deliberately blank rather than a product name: showing the wrong brand is
+ * worse than briefly showing none, and a hardcoded default here would mask a
+ * broken branding endpoint instead of surfacing it.
+ */
 export const DEFAULT_BRANDING: Branding = {
   tenant: "default",
-  app_name: "EquiMed",
-  short_name: "EquiMed",
-  tagline: "Distribution Suite",
+  app_name: "",
+  short_name: "",
+  tagline: "",
   logo_light_data_url: "",
   logo_dark_data_url: "",
   favicon_data_url: "",
@@ -119,7 +126,10 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/public/branding")
+    // no-store: the response carries no validators, so a browser is free to
+    // cache it heuristically — which means a rebrand would never reach users
+    // who already loaded the old one. The server sends no-store too.
+    fetch("/api/public/branding", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: Branding | null) => {
         if (cancelled || !data) return;
@@ -136,7 +146,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const css = useMemo(() => brandingCss(branding), [branding]);
 
   useEffect(() => {
-    document.title = `${branding.app_name} — ${branding.tagline}`;
+    const parts = [branding.app_name, branding.tagline].filter(Boolean);
+    if (parts.length) document.title = parts.join(" — ");
   }, [branding.app_name, branding.tagline]);
 
   useEffect(() => {

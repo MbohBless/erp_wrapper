@@ -26,9 +26,9 @@ class TenantBranding(Base, TenantScoped):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # --- Identity -------------------------------------------------------
-    app_name: Mapped[str] = mapped_column(String(80), default="EquiMed")
-    short_name: Mapped[str] = mapped_column(String(24), default="EquiMed")
-    tagline: Mapped[str] = mapped_column(String(160), default="Distribution Suite")
+    app_name: Mapped[str] = mapped_column(String(80), default="")
+    short_name: Mapped[str] = mapped_column(String(24), default="")
+    tagline: Mapped[str] = mapped_column(String(160), default="")
     support_email: Mapped[str] = mapped_column(String(160), default="")
     support_url: Mapped[str] = mapped_column(String(255), default="")
 

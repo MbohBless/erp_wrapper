@@ -162,3 +162,47 @@ def test_dashboard_reset_restores_the_default(client, admin_token):
     )
     assert resp.status_code == 200
     assert len(resp.json()["dashboard"]["widgets"]) == len(DEFAULT_DASHBOARD.widgets)
+
+
+# --- Env-configurable brand defaults ---------------------------------------
+def test_env_brand_fills_in_when_a_tenant_has_not_customised(client, admin_token, monkeypatch):
+    """A self-hosted install should show its own name from first boot, with no
+    database edit — so blank stored values inherit BRAND_APP_NAME."""
+    from config import settings
+    from repositories.branding_repository import BrandingRepository
+    from services.branding_service import BrandingService
+
+    class _Repo:
+        def as_dict(self):
+            return {"app_name": "", "short_name": "", "tagline": "", "dashboard": {}}
+
+    monkeypatch.setattr(settings, "brand_app_name", "Quality Biomedicals")
+    monkeypatch.setattr(settings, "brand_short_name", "QBM")
+    monkeypatch.setattr(settings, "brand_tagline", "Biomedical Equipment")
+
+    out = BrandingService(_Repo()).get()
+    assert out.app_name == "Quality Biomedicals"
+    assert out.short_name == "QBM"
+    assert out.tagline == "Biomedical Equipment"
+
+
+def test_stored_branding_beats_the_env_default(monkeypatch):
+    from config import settings
+    from services.branding_service import BrandingService
+
+    class _Repo:
+        def as_dict(self):
+            return {"app_name": "Northwind", "short_name": "", "tagline": "", "dashboard": {}}
+
+    monkeypatch.setattr(settings, "brand_app_name", "Quality Biomedicals")
+    monkeypatch.setattr(settings, "brand_short_name", "")
+    out = BrandingService(_Repo()).get()
+    assert out.app_name == "Northwind"
+    assert out.short_name == "Northwind"  # derived from app_name, not the env
+
+
+def test_public_branding_is_not_cacheable(client):
+    """A rebrand must reach a browser that already loaded the old response."""
+    resp = client.get("/public/branding")
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("cache-control", "").lower()

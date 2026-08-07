@@ -1,5 +1,6 @@
 """Branding business logic: validated theme, assets and dashboard layout."""
 
+from config import settings
 from repositories.branding_repository import BrandingRepository
 from schemas.branding import (
     DEFAULT_DASHBOARD,
@@ -16,6 +17,15 @@ class BrandingService:
 
     def _current(self) -> BrandingRead:
         data = self.repo.as_dict()
+        # A tenant that has not customised its identity inherits the deployment's
+        # brand from the environment. Empty means "never set", which is why the
+        # columns default to blank rather than to a product name — otherwise
+        # BRAND_APP_NAME could never take effect.
+        data["app_name"] = data.get("app_name") or settings.brand_app_name
+        data["short_name"] = (
+            data.get("short_name") or settings.brand_short_name or data["app_name"][:24]
+        )
+        data["tagline"] = data.get("tagline") or settings.brand_tagline
         # An empty layout means "never customised" — serve the product default
         # rather than an empty dashboard.
         if not data.get("dashboard", {}).get("widgets"):

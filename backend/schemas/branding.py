@@ -170,9 +170,9 @@ DEFAULT_DASHBOARD = DashboardLayout(
 
 # --- Read / update models -------------------------------------------------
 class BrandingBase(BaseModel):
-    app_name: Annotated[str, Field(max_length=80)] = "EquiMed"
-    short_name: Annotated[str, Field(max_length=24)] = "EquiMed"
-    tagline: Annotated[str, Field(max_length=160)] = "Distribution Suite"
+    app_name: Annotated[str, Field(max_length=80)] = ""
+    short_name: Annotated[str, Field(max_length=24)] = ""
+    tagline: Annotated[str, Field(max_length=160)] = ""
     support_email: Annotated[str, Field(max_length=160)] = ""
     support_url: Annotated[str, Field(max_length=255)] = ""
     logo_light_data_url: str = ""
