@@ -183,7 +183,10 @@ fi
 # --- 6. Upload + retention -------------------------------------------------
 echo "uploading ${NAME} (${SIZE})…"
 rclone copyto "$UPLOAD" "${REMOTE}/${NAME}" --s3-no-check-bucket || die "upload failed"
-printf '%s' "$CONTENT_HASH" | rclone rcat "${REMOTE}/latest.hash" --s3-no-check-bucket
+# copyto from a file, not rcat: rcat streams from stdin and R2 answers that
+# with 501 Not Implemented.
+printf '%s' "$CONTENT_HASH" > "$STAGE/latest.hash"
+rclone copyto "$STAGE/latest.hash" "${REMOTE}/latest.hash" --s3-no-check-bucket
 ok "uploaded"
 
 # Keep the newest KEEP bundles. Names sort chronologically because the
