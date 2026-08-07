@@ -1,8 +1,15 @@
 # Public reverse proxy — single-tenant / self-hosted (TENANCY_MODE=single).
 #
-# Served over plain HTTP on :80 for local/single-VPS deployments. To enable
-# automatic HTTPS, replace the `:80` site address with your real domain (e.g.
-# `erp.example.com`) and Caddy will provision a certificate automatically.
+# The site address comes from SITE_ADDRESS so the same file works for local
+# development and for a real deployment:
+#
+#   SITE_ADDRESS=:80                     plain HTTP on any host (default;
+#                                        local dev, or IP-only before DNS)
+#   SITE_ADDRESS=app.example.com         automatic HTTPS — Caddy obtains and
+#                                        renews a Let's Encrypt certificate
+#
+# Naming a hostname is the whole switch. Caddy provisions the certificate on
+# first request and renews it thereafter; nothing else needs configuring.
 #
 # For the shared SaaS plane use `Caddyfile.saas` instead — set
 # `CADDYFILE=Caddyfile.saas` in .env. That file adds the operator console,
@@ -14,7 +21,7 @@
 }
 
 # ---- Main app: frontend + backend ----
-:80 {
+{$SITE_ADDRESS} {
 	# /api/* -> FastAPI. handle_path strips the /api prefix, so a request to
 	# /api/health reaches the backend as /health (FastAPI uses root_path=/api
 	# so its OpenAPI docs at /api/docs stay correct).
@@ -29,6 +36,7 @@
 }
 
 # ---- ERPNext admin UI (add `127.0.0.1 erp.localhost` to /etc/hosts) ----
+# Local convenience only; in production the desk is not published at all.
 http://erp.localhost {
 	reverse_proxy erpnext-nginx:8080
 }

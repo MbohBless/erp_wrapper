@@ -312,6 +312,9 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     environment:
+      # ":80" = plain HTTP on any host (dev / IP-only). A hostname switches
+      # Caddy into automatic HTTPS with a Let's Encrypt certificate.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
       BASE_DOMAIN: ${BASE_DOMAIN:-equimed.app}
       PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-console.equimed.app}
     volumes:
