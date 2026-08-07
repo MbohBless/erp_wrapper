@@ -127,14 +127,37 @@ docker compose exec -T backend rm -f /tmp/app-backup.db >/dev/null 2>&1 || true
 ok "app database captured"
 
 # --- 3. Content hash -------------------------------------------------------
-# The dump is gzipped with a timestamp and carries a "Dump completed on" line,
-# so the raw file differs on every run even when nothing changed. Hash the
-# decompressed SQL with those volatile lines stripped instead, so the hash
-# tracks actual data rather than the clock.
+# The dump differs on every run even when nobody has touched the system:
+# gzip stores a timestamp, mysqldump writes a "Dump completed on" line, and
+# ERPNext's scheduler continuously appends to its own bookkeeping tables.
+# Measured on this stack: two dumps 5 minutes apart with the app idle differed
+# only in `tabScheduled Job Log` (a row per tick) and `tabScheduled Job Type`
+# (last_execution timestamps).
+#
+# Hashing that would mean "changed" forever and the de-duplication would never
+# fire. So the hash ignores those tables — they are still IN the backup, they
+# just do not count as a change. Anything a user did lands elsewhere.
+NOISY_TABLES='tabScheduled Job Log|tabScheduled Job Type|tabError Log|tabActivity Log|tabSessions|tabError Snapshot'
+
+# mysqldump writes extended INSERTs that wrap across lines, so filtering by
+# line content alone would keep the continuations. Track the current table
+# from the section header and drop the whole block instead.
+strip_noise() {
+  awk -v noisy="$NOISY_TABLES" '
+    /^-- Dumping data for table/ {
+      tbl = $0
+      sub(/^.*`/, "", tbl); sub(/`.*$/, "", tbl)
+      skip = (tbl ~ "^(" noisy ")$")
+    }
+    !skip
+  '
+}
+
 CONTENT_HASH=$(
   {
     gunzip -c "$STAGE/erpnext-database.sql.gz" \
       | grep -avE '^-- (Dump completed|Server version|Host:)' \
+      | strip_noise \
       | sha256sum | cut -d' ' -f1
     sha256sum "$STAGE/app.db" | cut -d' ' -f1
   } | sha256sum | cut -d' ' -f1
