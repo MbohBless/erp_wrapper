@@ -58,6 +58,30 @@ else
   backup_site "${SITE_NAME:-equimed.local}" || failed=$((failed + 1))
 fi
 
+# The app database was previously not backed up at all — losing it means
+# losing users, branding, and (once payments ship) which payments have already
+# been posted to the ledger, which cannot be reconstructed from ERPNext.
+#
+# SQLite's online backup API rather than `cp`: copying the file under a live
+# writer can capture a torn page and yield a file that will not open.
+echo "--- backing up the app database"
+mkdir -p backups
+if docker compose exec -T backend python -c "
+import sqlite3
+s = sqlite3.connect('/app/data/app.db')
+d = sqlite3.connect('/tmp/app-backup.db')
+s.backup(d); d.close(); s.close()
+" >/dev/null 2>&1 && docker compose cp backend:/tmp/app-backup.db "backups/app-$(date -u +%Y%m%dT%H%M%SZ).db" >/dev/null 2>&1; then
+  docker compose exec -T backend rm -f /tmp/app-backup.db >/dev/null 2>&1 || true
+  echo "    ok: app database"
+  # Keep the local copies bounded; off-site retention is handled by
+  # backup-remote.sh.
+  ls -1t backups/app-*.db 2>/dev/null | tail -n +11 | xargs -r rm -f
+else
+  echo "    FAILED: app database" >&2
+  failed=$((failed + 1))
+fi
+
 if [ "$failed" -gt 0 ]; then
   echo "Backup finished with ${failed} failure(s)." >&2
   exit 1
