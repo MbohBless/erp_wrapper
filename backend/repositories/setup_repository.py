@@ -93,7 +93,7 @@ class SetupRepository:
         if lines:
             je = await create_journal_entry(
                 self.client, company=company, posting_date=sd, accounts=lines,
-                remark="Opening balances (EquiMed first-time setup)", is_opening=True,
+                remark="Opening balances (first-time setup)", is_opening=True,
             )
             opening_ref = je.get("name", "")
 

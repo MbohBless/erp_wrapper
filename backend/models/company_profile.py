@@ -25,8 +25,8 @@ class CompanyProfile(Base, TenantScoped):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    display_name: Mapped[str] = mapped_column(String(160), default="EquiMed")
-    legal_name: Mapped[str] = mapped_column(String(200), default="EquiMed SA")
+    display_name: Mapped[str] = mapped_column(String(160), default="")
+    legal_name: Mapped[str] = mapped_column(String(200), default="")
     tagline: Mapped[str] = mapped_column(String(200), default="Medical Equipment Distribution")
 
     address_line: Mapped[str] = mapped_column(String(255), default="")

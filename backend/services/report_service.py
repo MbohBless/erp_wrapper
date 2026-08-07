@@ -13,6 +13,7 @@ from services.dashboard_service import DashboardService
 from services.finance_service import FinanceService
 from services.inventory_service import InventoryService
 from utils.pdf_report import Column, ReportDoc, render_report_pdf
+from tenancy import current_tenant_or_none
 from utils.pdf_signing import sign_pdf
 
 _LOW_STOCK_THRESHOLD = 10
@@ -89,7 +90,15 @@ class ReportService:
         location = ", ".join(
             p for p in [self.profile.get("city"), self.profile.get("country")] if p
         ) or "Cameroon"
-        org_name = self.profile.get("legal_name") or "EquiMed"
+        # Signing identity comes from the tenant's own legal name — never a
+        # product default, and never shared between tenants.
+        org_name = (
+            self.profile.get("legal_name")
+            or self.profile.get("display_name")
+            or "Reporting"
+        )
+        tenant_id = current_tenant_or_none()
+        tenant_id = tenant_id.id if tenant_id else "default"
 
         def _render_and_sign() -> bytes:
             # reportlab + pyHanko are synchronous (pyHanko's signer calls
@@ -100,6 +109,7 @@ class ReportService:
                 reason=f"Certified {doc.title}",
                 location=location,
                 org_name=org_name,
+                tenant_id=tenant_id,
             )
 
         signed = await run_in_threadpool(_render_and_sign)

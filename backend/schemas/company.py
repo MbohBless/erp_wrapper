@@ -4,8 +4,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class CompanyProfileBase(BaseModel):
-    display_name: str = "EquiMed"
-    legal_name: str = "EquiMed SA"
+    display_name: str = ""
+    legal_name: str = ""
     tagline: str = "Medical Equipment Distribution"
     address_line: str = ""
     city: str = "Douala"
