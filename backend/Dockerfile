@@ -15,4 +15,9 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers makes uvicorn read X-Forwarded-For/Proto instead of logging
+# the reverse proxy as the client. --forwarded-allow-ips=* is safe here because
+# this port is never published: it is `expose`d on the compose network only, so
+# Caddy is the sole thing that can reach it (see docker-compose.yml).
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]
