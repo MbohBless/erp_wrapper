@@ -17,8 +17,26 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# shellcheck disable=SC1091
-[ -f .env ] && set -a && . ./.env && set +a
+# .env is a key/value file, not a shell script. Sourcing it EXECUTES it, so a
+# value like `Biomedical Equipment & Supplies` backgrounds a process and tries
+# to run "Equipment" — and a hostile value would simply run. Read the specific
+# keys we need instead, stripping surrounding quotes, with no evaluation.
+env_get() {
+  [ -f .env ] || return 0
+  local v
+  v=$(sed -nE "s/^$1=(.*)$/\1/p" .env | tail -1)
+  # Strip one layer of surrounding quotes with parameter expansion rather than
+  # a second sed — nesting sed escapes inside shell quoting is how the first
+  # attempt silently returned the literal "\1".
+  case "$v" in
+    \"*\") v=${v#\"}; v=${v%\"} ;;
+    \'*\') v=${v#\'}; v=${v%\'} ;;
+  esac
+  printf '%s' "$v"
+}
+
+TENANCY_MODE="${TENANCY_MODE:-$(env_get TENANCY_MODE)}"
+SITE_NAME="${SITE_NAME:-$(env_get SITE_NAME)}"
 
 MODE="${TENANCY_MODE:-single}"
 BENCH="docker compose exec -T erpnext-backend"

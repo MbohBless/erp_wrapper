@@ -74,7 +74,12 @@ else
       local esc; esc=$(printf '%s' "$val" | sed -e 's/[\/&]/\\&/g')
       sed -i -E "s|^#?${key}=.*|${key}=${esc}|" .env
     else
-      printf '%s=%s\n' "$key" "$val" >> .env
+      # Quote anything with a space or shell metacharacter, so the file stays
+      # safe to read with a plain shell loop as well as by Compose.
+      case "$val" in
+        *[\ \&\|\;\<\>\(\)\$\`]*) printf '%s="%s"\n' "$key" "$val" >> .env ;;
+        *) printf '%s=%s\n' "$key" "$val" >> .env ;;
+      esac
     fi
   }
 

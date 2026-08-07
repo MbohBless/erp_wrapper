@@ -27,8 +27,32 @@ ok()   { echo "${GREEN}✓${OFF} $*"; }
 warn() { echo "${YELLOW}!${OFF} $*"; }
 die()  { echo "${RED}✗${OFF} $*" >&2; exit 1; }
 
-# shellcheck disable=SC1091
-[ -f .env ] && set -a && . ./.env && set +a
+# .env is a key/value file, not a shell script. Sourcing it EXECUTES it, so a
+# value like `Biomedical Equipment & Supplies` backgrounds a process and tries
+# to run "Equipment" — and a hostile value would simply run. Read the specific
+# keys we need instead, stripping surrounding quotes, with no evaluation.
+env_get() {
+  [ -f .env ] || return 0
+  local v
+  v=$(sed -nE "s/^$1=(.*)$/\1/p" .env | tail -1)
+  # Strip one layer of surrounding quotes with parameter expansion rather than
+  # a second sed — nesting sed escapes inside shell quoting is how the first
+  # attempt silently returned the literal "\1".
+  case "$v" in
+    \"*\") v=${v#\"}; v=${v%\"} ;;
+    \'*\') v=${v#\'}; v=${v%\'} ;;
+  esac
+  printf '%s' "$v"
+}
+
+R2_BUCKET="${R2_BUCKET:-$(env_get R2_BUCKET)}"
+R2_ACCOUNT_ID="${R2_ACCOUNT_ID:-$(env_get R2_ACCOUNT_ID)}"
+R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:-$(env_get R2_ACCESS_KEY_ID)}"
+R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:-$(env_get R2_SECRET_ACCESS_KEY)}"
+R2_PREFIX="${R2_PREFIX:-$(env_get R2_PREFIX)}"
+BACKUP_KEEP="${BACKUP_KEEP:-$(env_get BACKUP_KEEP)}"
+BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(env_get BACKUP_ENCRYPTION_KEY)}"
+SITE_NAME="${SITE_NAME:-$(env_get SITE_NAME)}"
 
 : "${R2_BUCKET:?set R2_BUCKET in .env}"
 : "${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID in .env}"
