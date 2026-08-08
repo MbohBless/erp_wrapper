@@ -41,7 +41,16 @@ class FakeERPNextClient:
     async def list_documents(
         self, doctype, fields=None, filters=None, limit=20, start=0, order_by=None
     ):
-        docs = [d for d in self.store.values() if self._matches(d, filters)]
+        # Filter by doctype. Without this the fake returns every document
+        # regardless of type, so a repository that creates a supporting record
+        # of another DocType silently corrupts an unrelated listing — and a
+        # test suite that cannot tell two DocTypes apart cannot catch a
+        # repository writing to the wrong one.
+        docs = [
+            d
+            for d in self.store.values()
+            if d.get("doctype") in (doctype, None) and self._matches(d, filters)
+        ]
         return docs[start : start + limit]
 
     async def get_document(self, doctype, name):
