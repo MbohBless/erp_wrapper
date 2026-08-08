@@ -57,7 +57,10 @@ class PaymentRepository:
             raise ERPNextError("Could not build a payment for this document", 502)
 
         if posting_date:
+            # set_posting_time is required for ERPNext to honour posting_date at
+            # all; without it the entry silently lands on today.
             pe["posting_date"] = posting_date
+            pe["set_posting_time"] = 1
             pe["reference_date"] = posting_date
         if mode:
             pe["mode_of_payment"] = mode

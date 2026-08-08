@@ -238,7 +238,12 @@ async def create_invoice(
     if due_date:
         payload["due_date"] = due_date
     if posting_date:
+        # ERPNext ignores a supplied posting_date unless set_posting_time is
+        # also set — it silently stamps today instead. Without this, backdating
+        # an invoice appears to work and posts it to the wrong period, which is
+        # an accounting error nobody sees until a period is closed.
         payload["posting_date"] = posting_date
+        payload["set_posting_time"] = 1
     if remarks:
         payload["remarks"] = remarks
     if update_stock:
@@ -269,7 +274,12 @@ async def create_purchase(
     if bill_no:
         payload["bill_no"] = bill_no
     if posting_date:
+        # ERPNext ignores a supplied posting_date unless set_posting_time is
+        # also set — it silently stamps today instead. Without this, backdating
+        # an invoice appears to work and posts it to the wrong period, which is
+        # an accounting error nobody sees until a period is closed.
         payload["posting_date"] = posting_date
+        payload["set_posting_time"] = 1
     if remarks:
         payload["remarks"] = remarks
     doc = await client.create_document("Purchase Invoice", payload)
