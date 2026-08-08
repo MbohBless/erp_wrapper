@@ -9,10 +9,12 @@ import { useTheme } from "@/lib/theme";
 export default function TopBar({
   user,
   onToggleCollapse,
+  onOpenNav,
   onLogout,
 }: {
   user: string | null;
   onToggleCollapse: () => void;
+  onOpenNav: () => void;
   onLogout: () => void;
 }) {
   const { theme, toggle } = useTheme();
@@ -22,12 +24,23 @@ export default function TopBar({
   const initials = (user ?? "AM").slice(0, 2).toUpperCase();
 
   return (
-    <header className="h-[72px] shrink-0 flex items-center gap-4 px-6 border-b border-divider bg-bg relative z-20">
+    <header className="h-[72px] shrink-0 flex items-center gap-2 md:gap-4 px-3 md:px-6 border-b border-divider bg-bg relative z-20">
+      {/* Two buttons rather than one branching on viewport width: the mobile
+          sidebar is a slide-over and the desktop one collapses, so the same
+          control means different things. */}
+      <button
+        type="button"
+        onClick={onOpenNav}
+        aria-label="Open navigation"
+        className="md:hidden icobtn grid place-items-center w-9 h-9 shrink-0 border border-divider muted"
+      >
+        <Icon name="menu" size={17} />
+      </button>
       <button
         type="button"
         onClick={onToggleCollapse}
         title="Toggle sidebar"
-        className="icobtn grid place-items-center w-9 h-9 shrink-0 border border-divider muted"
+        className="hidden md:grid icobtn place-items-center w-9 h-9 shrink-0 border border-divider muted"
       >
         <Icon name="menu" size={17} />
       </button>
@@ -37,10 +50,10 @@ export default function TopBar({
           <Icon name="search" size={16} />
         </span>
         <input
-          className="eq-field w-full h-10 pl-9 pr-14 text-sm"
+          className="eq-field w-full h-10 pl-9 pr-3 md:pr-14 text-sm"
           placeholder={t("topbar.search")}
         />
-        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] muted-2 border border-divider px-1.5 rounded">
+        <kbd className="hidden md:block absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] muted-2 border border-divider px-1.5 rounded">
           ⌘K
         </kbd>
       </div>
