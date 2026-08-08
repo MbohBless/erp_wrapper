@@ -1,6 +1,7 @@
 // Shared chrome: navigation, top bar, common actions, settings, generic labels.
 export const common = {
   en: {
+    "combo.freeText": "No match — type any value",
     "brand.tagline": "Distribution Suite",
     "nav.group.overview": "Overview",
     "nav.group.operations": "Operations",
@@ -66,6 +67,7 @@ export const common = {
     "lang.en": "English",
   },
   fr: {
+    "combo.freeText": "Aucune correspondance — saisissez librement",
     "brand.tagline": "Suite de distribution",
     "nav.group.overview": "Aperçu",
     "nav.group.operations": "Opérations",

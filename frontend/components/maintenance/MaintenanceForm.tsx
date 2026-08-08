@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import Combobox, { type ComboOption } from "@/components/ui/Combobox";
 import DocFormShell, { DOC_FIELD, DOC_GRID, DOC_LABEL } from "@/components/ui/DocFormShell";
 import { useAuth } from "@/lib/auth";
+import { listCustomers } from "@/lib/customers";
+import { listEquipment } from "@/lib/equipment";
 import { useI18n } from "@/lib/i18n";
 import {
   type MaintenanceStatus,
   type Ticket,
   type TicketInput,
   createTicket,
+  listTickets,
   updateTicket,
 } from "@/lib/maintenance";
 
@@ -38,6 +42,28 @@ export default function MaintenanceForm({ initial }: { initial?: Ticket | null }
     Cancelled: t("maintenance.status.cancelled"),
   };
 
+  // Suggestions for the reference fields. `retry: false` and the ?? [] fallback
+  // are load-bearing: a Biomedical Engineer may create a ticket but may NOT read
+  // /customers, so that request answers 403 for them. The field must keep
+  // working as free text rather than showing an error for a list that is only
+  // ever an aid.
+  const suggest = { enabled: !!token, retry: false, staleTime: 60_000 };
+  const customers = useQuery({
+    queryKey: ["combo", "customers"],
+    queryFn: () => listCustomers(token as string),
+    ...suggest,
+  });
+  const equipment = useQuery({
+    queryKey: ["combo", "equipment"],
+    queryFn: () => listEquipment(token as string),
+    ...suggest,
+  });
+  const tickets = useQuery({
+    queryKey: ["combo", "tickets"],
+    queryFn: () => listTickets(token as string),
+    ...suggest,
+  });
+
   const [tab, setTab] = useState("details");
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<TicketInput>({
@@ -52,6 +78,42 @@ export default function MaintenanceForm({ initial }: { initial?: Ticket | null }
 
   const set = <K extends keyof TicketInput>(k: K, v: TicketInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  const customerOptions: ComboOption[] = useMemo(
+    () =>
+      (customers.data ?? []).map((c) => ({
+        value: c.id,
+        hint: c.contact_person || c.phone || null,
+      })),
+    [customers.data]
+  );
+
+  // Narrow the serials to the chosen customer once there is one — an engineer
+  // servicing a hospital should not have to scroll past every other site's
+  // equipment. Falls back to the full list when the customer is free-typed and
+  // matches nothing.
+  const equipmentOptions: ComboOption[] = useMemo(() => {
+    const all = equipment.data ?? [];
+    const mine = form.customer
+      ? all.filter((e) => e.customer === form.customer)
+      : [];
+    return (mine.length ? mine : all).map((e) => ({
+      value: e.id,
+      hint: e.item_name || e.item_code || null,
+    }));
+  }, [equipment.data, form.customer]);
+
+  // Engineers are free text on the ticket, so the roster is whoever has already
+  // been named on one. No extra endpoint, and no dependency on /users — which
+  // is Administrator-only and would leave this empty for everyone else.
+  const engineerOptions: ComboOption[] = useMemo(() => {
+    const seen = new Set<string>();
+    for (const tk of tickets.data ?? []) {
+      const name = (tk.engineer ?? "").trim();
+      if (name) seen.add(name);
+    }
+    return [...seen].sort().map((value) => ({ value }));
+  }, [tickets.data]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -106,28 +168,31 @@ export default function MaintenanceForm({ initial }: { initial?: Ticket | null }
         <div className={DOC_GRID}>
           <div>
             <label className={DOC_LABEL}>{t("maintenance.field.customer")} *</label>
-            <input
-              className={DOC_FIELD}
+            <Combobox
               value={form.customer}
-              onChange={(e) => set("customer", e.target.value)}
+              onChange={(v) => set("customer", v)}
+              options={customerOptions}
               required
+              emptyHint={t("combo.freeText")}
             />
           </div>
           <div>
             <label className={DOC_LABEL}>{t("maintenance.field.equipment")}</label>
-            <input
-              className={DOC_FIELD}
+            <Combobox
               value={form.equipment ?? ""}
-              onChange={(e) => set("equipment", e.target.value)}
+              onChange={(v) => set("equipment", v)}
+              options={equipmentOptions}
               placeholder="VENT-0001"
+              emptyHint={t("combo.freeText")}
             />
           </div>
           <div>
             <label className={DOC_LABEL}>{t("maintenance.field.engineer")}</label>
-            <input
-              className={DOC_FIELD}
+            <Combobox
               value={form.engineer ?? ""}
-              onChange={(e) => set("engineer", e.target.value)}
+              onChange={(v) => set("engineer", v)}
+              options={engineerOptions}
+              emptyHint={t("combo.freeText")}
             />
           </div>
           <div>
