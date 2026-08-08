@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -85,7 +87,7 @@ function SettingsContent() {
               Set your starting financial position — bank & cash, open invoices and bills, stock,
               equipment and loans — as of your start date. {appName} posts it to the ledger once.
             </div>
-            <a href="/setup" className="btn btn-outlined shrink-0">Open setup wizard</a>
+            <Link href="/setup" className="btn btn-outlined shrink-0">Open setup wizard</Link>
           </div>
         </Section>
 

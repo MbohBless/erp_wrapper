@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -29,7 +31,7 @@ function SetupBanner() {
   });
   if (!data || data.setup_complete) return null;
   return (
-    <a
+    <Link
       href="/setup"
       className="flex items-center gap-3 mb-5 px-4 py-3 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] transition-colors"
     >
@@ -41,7 +43,7 @@ function SetupBanner() {
         <span className="block text-[13px] muted">Enter your opening balances once, and {appName} takes over from there.</span>
       </span>
       <span className="btn btn-filled shrink-0">Start setup</span>
-    </a>
+    </Link>
   );
 }
 

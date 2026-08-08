@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Icon } from "@/components/icons";
@@ -134,9 +135,15 @@ export default function Sidebar({
               const href = ROUTES[item.key] ?? "#";
               const active = href !== "#" && pathname.startsWith(href);
               return (
-                <a
+                // next/link, not <a>. A plain anchor is a full document
+                // navigation: the browser discards the page, refetches and
+                // re-parses the bundle, remounts React and re-runs every
+                // provider query — which is why changing tab looked like the
+                // whole site reloading.
+                <Link
                   key={item.key}
                   href={href}
+                  prefetch={href !== "#"}
                   data-active={active}
                   className={`navitem relative flex items-center gap-3 w-full px-3.5 py-2.5 rounded-lg text-sm ${
                     collapsed ? "justify-center" : ""
@@ -151,7 +158,7 @@ export default function Sidebar({
                     <Icon name={item.key} />
                   </span>
                   {!collapsed && <span>{t(`nav.${item.key}`)}</span>}
-                </a>
+                </Link>
               );
             })}
           </div>
