@@ -104,8 +104,60 @@ class InventoryService:
         return await self.stock.list(item_code, warehouse, limit, start)
 
     # -- Goods movements ----------------------------------------------------
+    async def _validate_movement(self, warehouse: str, items) -> None:
+        """Check a stock movement before ERPNext does.
+
+        ERPNext's own refusals arrive as opaque 502s from the caller's point of
+        view — "Group node warehouse is not allowed to select for transactions",
+        "X is not a stock Item", "Serial No / Batch No are mandatory for Item X",
+        and, when the quantity overflows its column, a raw pymysql DataError.
+        None of those tell the user which field to change.
+        """
+        wh = await self.warehouses.get(warehouse)
+        if wh is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"No warehouse named '{warehouse}'."
+            )
+        if wh.is_group:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"'{warehouse}' is a warehouse group, not a physical location. "
+                "Choose one of the warehouses inside it.",
+            )
+
+        for line in items:
+            product = await self.products.get(line.item_code)
+            if product is None:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    f"No product with SKU '{line.item_code}'.",
+                )
+            # A batch-tracked item cannot move without saying which batch.
+            if product.track_batches and not getattr(line, "batch_no", None):
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"'{line.item_code}' is batch-tracked, so a batch number is "
+                    "required. Create the batch first if it does not exist yet.",
+                )
+
     async def receive_goods(self, req: GoodsReceiptRequest) -> StockEntryRead:
+        await self._validate_movement(req.warehouse, req.items)
         return await self.stock_entries.create_receipt(req)
 
     async def issue_goods(self, req: GoodsIssueRequest) -> StockEntryRead:
+        await self._validate_movement(req.warehouse, req.items)
+
+        # Issuing more than is held drives ERPNext into a negative-stock error,
+        # or — for a large enough number — a raw database overflow. Compare with
+        # what is actually on hand and say so plainly instead.
+        levels = await self.stock.list(warehouse=req.warehouse, limit=500)
+        on_hand = {s.item_code: s.actual_qty for s in levels}
+        for line in req.items:
+            have = on_hand.get(line.item_code, 0)
+            if line.qty > have:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"Only {have:g} of '{line.item_code}' in {req.warehouse}; "
+                    f"cannot issue {line.qty:g}.",
+                )
         return await self.stock_entries.create_issue(req)

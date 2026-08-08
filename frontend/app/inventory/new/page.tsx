@@ -97,7 +97,11 @@ function StockEntryForm() {
     save.mutate();
   }
 
-  const warehouses = warehousesQ.data ?? [];
+  // Group warehouses are structure, not places: ERPNext refuses them for
+  // transactions ("Group node warehouse is not allowed to select for
+  // transactions"), which reached the user as an unexplained 502. Do not offer
+  // what cannot be chosen.
+  const warehouses = (warehousesQ.data ?? []).filter((w) => !w.is_group);
 
   return (
     <DocFormShell
