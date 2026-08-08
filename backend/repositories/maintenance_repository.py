@@ -28,6 +28,24 @@ _DEFAULT_ENGINEER = "Unassigned"
 _DEFAULT_WORK_DONE = "Maintenance visit"
 
 
+def _erpnext_lifecycle(status: str | None) -> dict:
+    """ERPNext's own mandatory lifecycle fields, derived from the ticket status.
+
+    The DocType requires `completion_status` and `maintenance_type`, which
+    overlap with — but are not the same as — this API's `status`. Rather than
+    exposing ERPNext's vocabulary through the API, the ticket status is the
+    single source of truth and these are derived from it.
+
+    Both are mandatory, so omitting them fails the create outright.
+    """
+    return {
+        "completion_status": (
+            "Fully Completed" if status == "Completed" else "Partially Completed"
+        ),
+        "maintenance_type": "Scheduled" if status == "Scheduled" else "Unscheduled",
+    }
+
+
 def _to_erpnext(data: dict) -> dict:
     return to_erpnext(data, _FIELD_MAP, bool_fields=("customer_signed",))
 
@@ -112,6 +130,7 @@ class MaintenanceRepository:
 
     async def create(self, data: MaintenanceCreate) -> MaintenanceRead:
         payload = _to_erpnext(data.model_dump(exclude_none=True))
+        payload.update(_erpnext_lifecycle(data.status))
 
         # ERPNext requires at least one row in the purpose table, with
         # service_person and work_done both set. The API models a ticket as a
@@ -133,7 +152,10 @@ class MaintenanceRepository:
         return _from_erpnext(doc)
 
     async def update(self, name: str, data: dict) -> MaintenanceRead:
-        doc = await self.client.update_document(self.DOCTYPE, name, _to_erpnext(data))
+        payload = _to_erpnext(data)
+        if data.get("status"):
+            payload.update(_erpnext_lifecycle(data["status"]))
+        doc = await self.client.update_document(self.DOCTYPE, name, payload)
         return _from_erpnext(doc)
 
     async def delete(self, name: str) -> None:
