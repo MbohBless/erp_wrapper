@@ -1,5 +1,6 @@
 export const inventory = {
   en: {
+    "inventory.noBatchTrackedProducts": "No product has batch tracking enabled yet — turn it on when creating the product.",
     "inventory.title": "Inventory",
     "inventory.operations": "Operations",
     "inventory.subtitle": "Stock levels, warehouses and batch tracking",
@@ -63,6 +64,7 @@ export const inventory = {
     "inventory.manufacturingDate": "Manufacturing date",
   },
   fr: {
+    "inventory.noBatchTrackedProducts": "Aucun produit n\u2019a le suivi des lots activé — activez-le à la création du produit.",
     "inventory.title": "Stock",
     "inventory.operations": "Opérations",
     "inventory.subtitle": "Niveaux de stock, entrepôts et suivi des lots",

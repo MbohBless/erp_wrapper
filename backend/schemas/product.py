@@ -16,6 +16,11 @@ class ProductBase(BaseModel):
     purchase_price: float | None = Field(default=None, ge=0)
     selling_price: float | None = Field(default=None, ge=0)
     unit: str = "Nos"  # -> stock_uom
+    # ERPNext refuses to create a Batch for an item that is not batch-tracked
+    # ("The selected item cannot have Batch"), and the flag cannot be changed
+    # once the item has stock movements — so it has to be settable here, at
+    # creation, or expiry tracking is unreachable for that product forever.
+    track_batches: bool = False  # -> has_batch_no
     image: str | None = Field(default=None, max_length=500)
     disabled: bool = False
 
@@ -34,6 +39,7 @@ class ProductUpdate(BaseModel):
     selling_price: float | None = Field(default=None, ge=0)
     unit: str | None = None
     image: str | None = Field(default=None, max_length=500)
+    track_batches: bool | None = None
     disabled: bool | None = None
 
 

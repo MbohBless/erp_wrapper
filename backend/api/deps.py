@@ -158,23 +158,20 @@ get_payment_service = erpnext_service(lambda c: PaymentService(PaymentRepository
 get_dashboard_service = erpnext_service(
     lambda c: DashboardService(DashboardRepository(c))
 )
-get_inventory_service = erpnext_service(
-    lambda c: InventoryService(
-        warehouses=WarehouseRepository(c),
-        batches=BatchRepository(c),
-        stock=StockRepository(c),
-        stock_entries=StockEntryRepository(c),
-    )
-)
-
-
 def _build_inventory_service(client: ERPNextClient) -> InventoryService:
     return InventoryService(
         warehouses=WarehouseRepository(client),
         batches=BatchRepository(client),
         stock=StockRepository(client),
         stock_entries=StockEntryRepository(client),
+        products=ProductRepository(client),
     )
+
+
+# One builder, used by both the route dependency and the report service. These
+# were two separate constructions of the same object; adding a repository to one
+# and not the other is exactly how that drifted.
+get_inventory_service = erpnext_service(_build_inventory_service)
 
 
 def get_report_service(

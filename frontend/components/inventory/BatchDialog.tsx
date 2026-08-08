@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
+import Combobox, { type ComboOption } from "@/components/ui/Combobox";
 import Drawer from "@/components/ui/Drawer";
+import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import type { BatchInput } from "@/lib/inventory";
+import { listProducts } from "@/lib/products";
 
 const FIELD = "eq-field w-full px-3 py-2.5 text-sm";
 const LABEL = "block text-[13px] muted mb-1.5";
@@ -22,6 +26,27 @@ export default function BatchDialog({
   onCancel: () => void;
 }) {
   const { t } = useI18n();
+  const { token } = useAuth();
+
+  // Only batch-tracked products can carry a batch — ERPNext rejects the rest
+  // with "The selected item cannot have Batch". Offering the full catalogue
+  // would suggest choices that are guaranteed to fail on save.
+  const products = useQuery({
+    queryKey: ["combo", "products", "batch-tracked"],
+    queryFn: () => listProducts(token as string),
+    enabled: !!token,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const skuOptions: ComboOption[] = useMemo(
+    () =>
+      (products.data ?? [])
+        .filter((p) => p.track_batches)
+        .map((p) => ({ value: p.sku, hint: p.name })),
+    [products.data]
+  );
+  const trackedCount = skuOptions.length;
+
   const [batchId, setBatchId] = useState("");
   const [itemCode, setItemCode] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -67,7 +92,18 @@ export default function BatchDialog({
         </div>
         <div>
           <label className={LABEL}>{t("inventory.batchProduct")} *</label>
-          <input className={FIELD} value={itemCode} onChange={(e) => setItemCode(e.target.value)} required placeholder="THERMO-001" />
+          <Combobox
+            value={itemCode}
+            onChange={setItemCode}
+            options={skuOptions}
+            required
+            placeholder="THERMO-001"
+            emptyHint={
+              trackedCount === 0
+                ? t("inventory.noBatchTrackedProducts")
+                : t("combo.freeText")
+            }
+          />
         </div>
         <div>
           <label className={LABEL}>{t("inventory.expiryDate")}</label>

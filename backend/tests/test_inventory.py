@@ -43,7 +43,23 @@ def test_warehouse_crud(client, admin_token, fake_erpnext):
 
 
 # -------------------------------------------------------------------- Batches
+def _batch_tracked_product(client, token, sku="THERMO-001"):
+    """A batch needs a product that is actually batch-tracked.
+
+    ERPNext refuses to create a Batch for an item without has_batch_no, so the
+    service checks first. These tests previously posted a batch for a SKU that
+    did not exist anywhere, which only passed because the fake accepted it.
+    """
+    client.post(
+        "/products",
+        json={"sku": sku, "name": f"Product {sku}", "track_batches": True},
+        headers=auth_header(token),
+    )
+    return sku
+
+
 def test_batch_create_with_expiry(client, admin_token, fake_erpnext):
+    _batch_tracked_product(client, admin_token)
     resp = client.post(
         "/inventory/batches",
         json={
@@ -70,6 +86,7 @@ def test_batch_create_with_expiry(client, admin_token, fake_erpnext):
 
 
 def test_batch_duplicate_conflict(client, admin_token, fake_erpnext):
+    _batch_tracked_product(client, admin_token)
     body = {"batch_id": "DUP-B", "item_code": "THERMO-001"}
     assert (
         client.post(
@@ -206,3 +223,44 @@ def test_accountant_cannot_manage_warehouse(client, make_token, fake_erpnext):
 def test_unauthenticated_rejected(client, fake_erpnext):
     assert client.get("/inventory/stock").status_code == 401
     assert client.get("/inventory/warehouses").status_code == 401
+
+
+def test_batch_for_unknown_sku_is_a_clear_404(client, admin_token, fake_erpnext):
+    """Left to ERPNext this was a 500: "cannot unpack non-iterable NoneType"."""
+    resp = client.post(
+        "/inventory/batches",
+        json={"batch_id": "B-UNKNOWN", "item_code": "NO-SUCH-SKU"},
+        headers=auth_header(admin_token),
+    )
+    assert resp.status_code == 404
+    assert "NO-SUCH-SKU" in resp.json()["detail"]
+
+
+def test_batch_for_untracked_product_explains_what_to_do(
+    client, admin_token, fake_erpnext
+):
+    """ERPNext's own message is "The selected item cannot have Batch", which
+    does not say that batch tracking is a per-product flag."""
+    client.post(
+        "/products",
+        json={"sku": "PLAIN-001", "name": "Not batch tracked"},
+        headers=auth_header(admin_token),
+    )
+    resp = client.post(
+        "/inventory/batches",
+        json={"batch_id": "B-PLAIN", "item_code": "PLAIN-001"},
+        headers=auth_header(admin_token),
+    )
+    assert resp.status_code == 422
+    assert "batch-tracked" in resp.json()["detail"]
+
+
+def test_track_batches_round_trips_to_has_batch_no(client, admin_token, fake_erpnext):
+    created = client.post(
+        "/products",
+        json={"sku": "TRACKED-1", "name": "Tracked", "track_batches": True},
+        headers=auth_header(admin_token),
+    )
+    assert created.status_code == 201, created.text
+    assert fake_erpnext.store["TRACKED-1"]["has_batch_no"] == 1
+    assert created.json()["track_batches"] is True

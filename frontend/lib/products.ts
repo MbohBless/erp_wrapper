@@ -9,6 +9,7 @@ export type Product = {
   manufacturer: string | null;
   purchase_price: number | null;
   selling_price: number | null;
+  track_batches?: boolean;
   unit: string;
   image: string | null;
   disabled: boolean;
@@ -22,6 +23,7 @@ export type ProductInput = {
   manufacturer?: string | null;
   purchase_price?: number | null;
   selling_price?: number | null;
+  track_batches?: boolean;
   unit?: string;
   image?: string | null;
   disabled?: boolean;

@@ -3,6 +3,7 @@
 from fastapi import HTTPException, status
 
 from repositories.batch_repository import BatchRepository
+from repositories.product_repository import ProductRepository
 from repositories.stock_entry_repository import StockEntryRepository
 from repositories.stock_repository import StockRepository
 from repositories.warehouse_repository import WarehouseRepository
@@ -26,11 +27,15 @@ class InventoryService:
         batches: BatchRepository,
         stock: StockRepository,
         stock_entries: StockEntryRepository,
+        products: ProductRepository,
     ) -> None:
         self.warehouses = warehouses
         self.batches = batches
         self.stock = stock
         self.stock_entries = stock_entries
+        # Batches need to check the item is batch-tracked before ERPNext is
+        # asked to create one.
+        self.products = products
 
     # -- Warehouses ---------------------------------------------------------
     async def list_warehouses(self, limit: int = 50, start: int = 0) -> list[WarehouseRead]:
@@ -68,6 +73,24 @@ class InventoryService:
     async def create_batch(self, data: BatchCreate) -> BatchRead:
         if await self.batches.get(data.batch_id) is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, "Batch already exists")
+
+        # Check the item before handing it to ERPNext. Left to ERPNext, an
+        # unknown item_code came back as a 500 ("cannot unpack non-iterable
+        # NoneType") and an item without batch tracking as a bare "The selected
+        # item cannot have Batch" — neither of which tells the user what to do.
+        product = await self.products.get(data.item_code)
+        if product is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                f"No product with SKU '{data.item_code}'.",
+            )
+        if not product.track_batches:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"'{data.item_code}' is not batch-tracked. Enable batch tracking "
+                "on the product first — ERPNext cannot add it once the item has "
+                "stock movements.",
+            )
         return await self.batches.create(data)
 
     # -- Stock levels -------------------------------------------------------

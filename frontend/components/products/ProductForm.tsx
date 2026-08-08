@@ -25,6 +25,7 @@ type FormState = {
   purchase_price: string;
   selling_price: string;
   image: string;
+  track_batches: boolean;
   disabled: boolean;
 };
 
@@ -52,6 +53,7 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
     purchase_price: initial?.purchase_price != null ? groupNum(String(initial.purchase_price)) : "",
     selling_price: initial?.selling_price != null ? groupNum(String(initial.selling_price)) : "",
     image: initial?.image ?? "",
+    track_batches: initial?.track_batches ?? false,
     disabled: initial?.disabled ?? false,
   });
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
@@ -79,6 +81,7 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
       purchase_price: num(form.purchase_price),
       selling_price: num(form.selling_price),
       image: form.image || null,
+      track_batches: form.track_batches,
       disabled: form.disabled,
     });
   }
@@ -167,6 +170,21 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             <label className={DOC_LABEL}>{t("products.imageUrl")}</label>
             <input className={DOC_FIELD} value={form.image} onChange={(e) => set("image", e.target.value)} />
           </div>
+          <label className="md:col-span-2 flex items-start gap-2.5 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.track_batches}
+              // ERPNext will not let this be turned on once the item has stock
+              // movements, so it is effectively a decision made at creation.
+              disabled={editing && (initial?.track_batches ?? false)}
+              onChange={(e) => set("track_batches", e.target.checked)}
+            />
+            <span>
+              {t("products.trackBatches")}
+              <span className="block text-[12px] muted">{t("products.trackBatchesHint")}</span>
+            </span>
+          </label>
           <label className="md:col-span-2 flex items-center gap-2.5 text-sm cursor-pointer">
             <input type="checkbox" checked={form.disabled} onChange={(e) => set("disabled", e.target.checked)} />
             {t("products.disabledHint")}

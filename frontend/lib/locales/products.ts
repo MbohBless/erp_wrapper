@@ -1,5 +1,7 @@
 export const products = {
   en: {
+    "products.trackBatches": "Track batches and expiry dates",
+    "products.trackBatchesHint": "Required before batch numbers can be recorded for this product. Cannot be changed once stock has moved.",
     "products.title": "Products",
     "products.subtitle": "Catalogue of medical equipment & supplies",
     "products.new": "New product",
@@ -31,6 +33,8 @@ export const products = {
     "products.editProduct": "Edit product",
   },
   fr: {
+    "products.trackBatches": "Suivre les lots et dates de péremption",
+    "products.trackBatchesHint": "Obligatoire pour enregistrer des numéros de lot. Non modifiable après tout mouvement de stock.",
     "products.title": "Produits",
     "products.subtitle": "Catalogue de matériel et fournitures médicales",
     "products.new": "Nouveau produit",
