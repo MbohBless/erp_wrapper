@@ -67,7 +67,7 @@ function expiringRows(data: DashboardSummary): ListRow[] {
 
 function revenueDelta(data: DashboardSummary): Delta | undefined {
   const trend = data.revenue_trend;
-  if (trend.length < 2) return undefined;
+  if (!trend || trend.length < 2) return undefined;
   const [prev, last] = [trend[trend.length - 2].amount, trend[trend.length - 1].amount];
   if (!prev) return undefined;
   const pct = Math.round(((last - prev) / prev) * 100);
@@ -93,6 +93,7 @@ export default function WidgetGrid({
   const render = (w: DashboardWidget): ReactNode => {
     switch (w.id) {
       case "kpi.revenue":
+        if (data.revenue_today === undefined) return null;
         return (
           <KpiCard
             icon="revenue"
@@ -100,10 +101,11 @@ export default function WidgetGrid({
             value={compact(data.revenue_today)}
             sub={t("dashboard.kpi.today")}
             delta={revenueDelta(data)}
-            spark={data.revenue_trend.map((p) => p.amount)}
+            spark={(data.revenue_trend ?? []).map((p) => p.amount)}
           />
         );
       case "kpi.inventory_value":
+        if (data.inventory_value === undefined) return null;
         return (
           <KpiCard
             icon="box3d"
@@ -113,6 +115,7 @@ export default function WidgetGrid({
           />
         );
       case "kpi.receivables":
+        if (data.outstanding_customers === undefined) return null;
         return (
           <KpiCard
             icon="receivable"
@@ -122,6 +125,7 @@ export default function WidgetGrid({
           />
         );
       case "kpi.payables":
+        if (data.outstanding_suppliers === undefined) return null;
         return (
           <KpiCard
             icon="payable"
@@ -131,6 +135,7 @@ export default function WidgetGrid({
           />
         );
       case "chart.revenue_trend":
+        if (!data.revenue_trend) return null;
         return (
           <TrendChart
             data={data.revenue_trend}
@@ -139,6 +144,7 @@ export default function WidgetGrid({
           />
         );
       case "chart.segment_mix":
+        if (!data.revenue_by_segment) return null;
         return (
           <SegmentMix
             viz={(w.viz as MixViz) || "progress"}
@@ -175,8 +181,10 @@ export default function WidgetGrid({
         );
       }
       case "table.recent_sales":
+        if (!data.recent_activity) return null;
         return <RecentSales items={data.recent_activity} />;
       case "feed.activity":
+        if (!data.recent_activity) return null;
         return <ActivityFeed items={data.recent_activity} />;
       default:
         // An unknown id means the server knows a widget this build does not.

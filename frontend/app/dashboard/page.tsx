@@ -90,23 +90,46 @@ function HeaderActions({ data }: { data: DashboardSummary }) {
   }, []);
 
   const exportCsv = () => {
+    // The export is a second way out of the same data, so it follows the same
+    // per-role rules: a figure the server withheld is absent from the file
+    // rather than exported as NaN. `undefined` means "not permitted" here —
+    // 0 is a real value and still exports.
+    const metric = (label: string, v: number | undefined): (string | number)[][] =>
+      v === undefined ? [] : [[label, Math.round(v)]];
+
     const rows: (string | number)[][] = [
       [`${appName} dashboard`, PERIOD],
       [],
       ["Metric", "Value (XAF)"],
-      [t("dashboard.kpi.revenue"), Math.round(data.revenue_today)],
-      [t("dashboard.kpi.outstandingCustomers"), Math.round(data.outstanding_customers)],
-      [t("dashboard.kpi.outstandingSuppliers"), Math.round(data.outstanding_suppliers)],
-      [t("dashboard.kpi.inventoryValue"), Math.round(data.inventory_value)],
+      ...metric(t("dashboard.kpi.revenue"), data.revenue_today),
+      ...metric(t("dashboard.kpi.outstandingCustomers"), data.outstanding_customers),
+      ...metric(t("dashboard.kpi.outstandingSuppliers"), data.outstanding_suppliers),
+      ...metric(t("dashboard.kpi.inventoryValue"), data.inventory_value),
       [t("dashboard.lowStock"), data.low_stock_count],
-      [],
-      [t("dashboard.trend"), ""],
-      ["Date", "Amount (XAF)"],
-      ...data.revenue_trend.map((p) => [p.date, Math.round(p.amount)] as (string | number)[]),
-      [],
-      [t("dashboard.activity"), ""],
-      ["Type", "Reference", "Party", "Amount (XAF)", "Date"],
-      ...data.recent_activity.map((a) => [a.type, a.reference, a.party ?? "", Math.round(a.amount), a.date ?? ""] as (string | number)[]),
+      ...(data.revenue_trend
+        ? [
+            [],
+            [t("dashboard.trend"), ""],
+            ["Date", "Amount (XAF)"],
+            ...data.revenue_trend.map(
+              (p) => [p.date, Math.round(p.amount)] as (string | number)[]
+            ),
+          ]
+        : []),
+      ...(data.recent_activity
+        ? [
+            [],
+            [t("dashboard.activity"), ""],
+            ["Type", "Reference", "Party", "Amount (XAF)", "Date"],
+            ...data.recent_activity.map(
+              (a) =>
+                [a.type, a.reference, a.party ?? "", Math.round(a.amount), a.date ?? ""] as (
+                  | string
+                  | number
+                )[]
+            ),
+          ]
+        : []),
     ];
     const slug = appName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     downloadCsv(`${slug || "dashboard"}-dashboard-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));

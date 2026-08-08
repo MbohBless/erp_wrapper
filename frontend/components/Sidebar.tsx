@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { useBranding } from "@/lib/branding";
 import { useI18n } from "@/lib/i18n";
+import { canSee, useRole } from "@/lib/role";
 import { useTheme } from "@/lib/theme";
 
 // Nav keys that map to real routes (others are placeholders for now).
@@ -71,6 +72,14 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { role } = useRole();
+  // The API refuses these routes anyway; this stops the menu advertising pages
+  // that would only answer 403. A group whose items all disappear is dropped
+  // too, so no orphaned section heading is left behind.
+  const visibleGroups = GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => canSee(i.key, role)),
+  })).filter((g) => g.items.length > 0);
   const { branding } = useBranding();
   const { theme } = useTheme();
   const width = collapsed ? "w-20" : "w-[280px]";
@@ -114,7 +123,7 @@ export default function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto eq-scroll px-3 py-3.5 flex flex-col gap-0.5">
-        {GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label}>
             {!collapsed && (
               <div className="text-[10px] tracking-[0.12em] uppercase muted-3 px-3.5 pt-3 pb-1.5">

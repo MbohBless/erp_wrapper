@@ -44,6 +44,22 @@ Bodies are `{ "detail": "<message>" }`.
 `Biomedical Engineer`. **Administrator is implicitly allowed on every endpoint.**
 Per-endpoint access is listed below as **view** (read) and **manage** (write).
 
+The table in this document is mirrored by hand in
+`backend/tests/test_rbac_matrix.py`, which walks **every route × every role** and
+asserts denied roles get exactly `403`. Two properties are enforced there:
+
+- *completeness* — a route with no declared expectation fails the suite, so a
+  new endpoint cannot ship without someone stating who may reach it;
+- *enforcement* — a widened or removed guard fails the suite, which is why the
+  expectations are restated by hand rather than read back from `require_roles`.
+
+Change a guard and you change that file, and this table, in the same commit.
+
+The frontend navigation mirrors the same matrix in `frontend/lib/role.ts`
+(`NAV_ROLES`) so the menu does not advertise pages the API refuses. That is a
+usability measure, never a security one — the API is the only enforcement point,
+and it is enforced independently of what the UI chooses to show.
+
 ### Tenancy
 
 Every request is resolved to a tenant from the `Host` header before auth runs.
@@ -234,11 +250,34 @@ installation_date, warranty_expiry_date, status }`.
 
 ---
 
-## Dashboard  `/api/dashboard`  — *any authenticated user*
+## Dashboard  `/api/dashboard`  — *any authenticated user, filtered by role*
 
-`GET /api/dashboard` → `{ revenue_today, outstanding_customers,
-outstanding_suppliers, inventory_value, low_stock_count, revenue_trend[],
-recent_activity[] }` (aggregated from ERPNext invoices, payments and bins).
+`GET /api/dashboard` → aggregated from ERPNext invoices, payments and bins.
+
+Every signed-in user may call it, but **the fields returned depend on their
+role**. Withheld fields are *absent from the JSON*, not null and not zero —
+zero is a real figure ("no revenue today") and has to stay distinguishable from
+"not permitted".
+
+| Tier | Fields | Roles |
+| --- | --- | --- |
+| Operational | `low_stock_count`, `low_stock_items[]`, `expiring_batches[]` | everyone |
+| Commercial | `revenue_today`, `revenue_trend[]`, `revenue_by_segment[]`, `top_customer`, `recent_activity[]` | Manager, Accountant, Sales |
+| Financial | `outstanding_customers`, `outstanding_suppliers`, `inventory_value` | Manager, Accountant |
+
+Administrator sees everything. An unrecognised role gets the operational tier
+only — the policy fails closed.
+
+Why this exists: `/finance/*` is Manager + Accountant, and the dashboard carries
+the same figures. Left role-agnostic it is a side door — a Store Keeper denied
+the finance pages would read revenue and receivables off their landing page
+instead. The filter is applied server-side in
+`services/dashboard_service.py` (`VISIBLE_FIELDS`); hiding a card in the
+frontend is presentation, not protection.
+
+Pinned by `backend/tests/test_dashboard_rbac.py`, which asserts on the HTTP
+payload rather than the projection helper — a filter lost between service and
+router would still pass a unit test of the helper.
 
 ## Reports  `/api/reports`  — *Manager, Accountant*
 

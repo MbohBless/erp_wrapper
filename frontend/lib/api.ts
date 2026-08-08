@@ -36,18 +36,22 @@ export type RevenueSegment = {
   pct: number;
 };
 
+// Optional fields are the ones the server withholds by role — see
+// backend services/dashboard_service.VISIBLE_FIELDS. A Store Keeper's response
+// simply has no `revenue_today` key, so these are `undefined` rather than 0:
+// zero is a real figure and must stay distinguishable from "not permitted".
 export type DashboardSummary = {
-  revenue_today: number;
-  outstanding_customers: number;
-  outstanding_suppliers: number;
-  inventory_value: number;
+  revenue_today?: number;
+  outstanding_customers?: number;
+  outstanding_suppliers?: number;
+  inventory_value?: number;
   low_stock_count: number;
-  revenue_trend: TrendPoint[];
-  recent_activity: ActivityItem[];
+  revenue_trend?: TrendPoint[];
+  recent_activity?: ActivityItem[];
   low_stock_items: LowStockItem[];
   expiring_batches: ExpiringBatch[];
-  revenue_by_segment: RevenueSegment[];
-  top_customer: RevenueSegment | null;
+  revenue_by_segment?: RevenueSegment[];
+  top_customer?: RevenueSegment | null;
 };
 
 export const getDashboard = (token: string) =>
