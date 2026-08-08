@@ -94,6 +94,35 @@ Generate each secret with `openssl rand -hex 32`. They must be different values.
 
 1. Log into ERPNext (`:8080`) and complete the setup wizard (Company = e.g.
    *EquiMed SA*, Country = Cameroon, Currency = XAF, Chart = SYSCOHADA).
+
+1b. **Run `scripts/configure_company_accounts.py`.** The wizard builds the chart
+   of accounts but does not reliably set the company's *default* accounts, and
+   the ones it guesses are matched by account-number prefix, which on SYSCOHADA
+   picks semantically wrong ones — the receivable control came out as
+   `4186-Clients, intérêts courus` (accrued interest) instead of `4111-Clients`.
+
+   ```bash
+   docker compose cp scripts/configure_company_accounts.py erpnext-backend:/tmp/cfg.py
+   echo 'exec(open("/tmp/cfg.py").read())' \
+     | docker compose exec -T erpnext-backend bench --site "$SITE_NAME" console
+   ```
+
+   Until this runs, the instance **cannot post**: a purchase invoice fails on a
+   missing Round Off Account, a goods receipt on a missing Stock Adjustment
+   Account, and a cash receipt demands a bank reference because no Mode of
+   Payment has an account. The quieter problem is worse — with the wrong
+   receivable control every customer invoice posts to an accrued-interest
+   account, and nothing complains until an audit.
+
+   > Pipe a single `exec(open(...).read())` line rather than redirecting the
+   > file into `bench console`. The console hands stdin to IPython, which splits
+   > it into cells and dedents function bodies, so a multi-line script raises
+   > `NameError` on its own helpers.
+
+   The account choices are conventional SYSCOHADA defaults for a distribution
+   business. **Have the client's accountant confirm them before real
+   transactions are posted** — the script restores a working configuration, it
+   does not give accounting advice.
 2. Generate API keys for the backend user → put them in `.env`
    (`ERPNEXT_API_KEY` / `ERPNEXT_API_SECRET`) → `docker compose up -d backend`.
 3. **Create the Custom Fields** the modules rely on (see `docs/api.md` →
@@ -247,6 +276,42 @@ database and compare row counts against live.
 ```bash
 gunzip -c erpnext-database.sql.gz | mariadb -uroot -p"$DB_ROOT_PASSWORD" verify_restore
 ```
+
+### Demo data, and getting back to a clean instance
+
+`scripts/seed_demo.py` populates a realistic dataset — five users (one per
+role), suppliers, customers, catalogue, stock, invoices spread across the
+dashboard's 30-day trend window, receipts, installed equipment and maintenance
+visits.
+
+```bash
+# From inside the backend container: no Cloudflare in the path, so a failing
+# document returns ITS OWN error rather than an edge 502 error page.
+docker compose cp scripts/seed_demo.py backend:/tmp/seed_demo.py
+docker compose exec -T backend python /tmp/seed_demo.py \
+  --base http://localhost:8000 \
+  --admin-email "$FIRST_ADMIN_EMAIL" --admin-password "$FIRST_ADMIN_PASSWORD"
+```
+
+It refuses to run if the instance already holds invoices or customers, unless
+`--force`. That guard matters: seeding onto a real ledger is not undone by
+deleting rows, because stock and GL entries fan out across doctypes.
+
+**The reset is a restore, not a delete.** ERPNext submitted documents cannot
+simply be removed, so the supported path back is a snapshot taken *before*
+seeding:
+
+```bash
+./scripts/backup-remote.sh --force        # then copy the newest bundle to a
+                                          # name not starting with "backup-",
+                                          # so retention never prunes it
+./scripts/restore.sh pristine-configured.tar.gz.enc
+```
+
+Retention only sweeps objects named `backup-*`, so a `pristine-*` object
+survives indefinitely. Keep one baseline that is **clean and already
+configured** — restoring a snapshot taken before
+`configure_company_accounts.py` hands back an instance that cannot post.
 
 ### Scheduling
 
