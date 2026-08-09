@@ -316,6 +316,37 @@ survives indefinitely. Keep one baseline that is **clean and already
 configured** — restoring a snapshot taken before
 `configure_company_accounts.py` hands back an instance that cannot post.
 
+### Alerting when something breaks
+
+`scripts/watchdog.sh` checks the stack every five minutes and posts to Slack or
+Discord when something is wrong. Set one webhook in `.env`; the format is
+detected from the URL, so either works:
+
+```bash
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...     # or discord.com/api/webhooks/...
+ALERT_SITE_URL=https://app.example.com/api/health
+sudo ./scripts/install-watchdog.sh
+./scripts/watchdog.sh --test      # prove the webhook works
+./scripts/watchdog.sh --status    # what it sees right now, notifying nobody
+```
+
+Checks: containers running and healthy, the API answering over TLS, disk under
+85%, memory headroom, **the newest off-site backup under 36h old**, and the
+certificate more than 14 days from expiry. `scripts/backup-remote.sh` posts to
+the same webhook when a backup fails.
+
+It notifies on *transitions*, then hourly while a problem persists, and once on
+recovery. Alerting every five minutes trains you to mute the channel, and the
+alert that matters then arrives somewhere muted.
+
+A systemd timer rather than cron: it starts after Docker, so a reboot does not
+fire an outage alert while the stack is still coming up.
+
+> **This cannot tell you the host died.** Nothing running on the host can.
+> Pair it with an external check — UptimeRobot, Better Stack and Healthchecks.io
+> all have free tiers that post to the same webhook. The watchdog covers "a part
+> of the system is unhealthy"; the external check covers "the machine is gone".
+
 ### Scheduling
 
 ```cron

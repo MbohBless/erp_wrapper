@@ -25,7 +25,25 @@ cd "$(dirname "$0")/.."
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
 ok()   { echo "${GREEN}✓${OFF} $*"; }
 warn() { echo "${YELLOW}!${OFF} $*"; }
-die()  { echo "${RED}✗${OFF} $*" >&2; exit 1; }
+
+# A failed backup is the failure you find out about last — when you need a
+# restore. Say so at the time, in the same channel as everything else.
+alert() {
+  local hook
+  hook="${ALERT_WEBHOOK_URL:-$(env_get ALERT_WEBHOOK_URL 2>/dev/null)}"
+  [ -n "$hook" ] || return 0
+  local text=":rotating_light: *EquiMed backup FAILED on $(hostname)*\n$1"
+  local payload
+  case "$hook" in
+    *discord.com*|*discordapp.com*)
+      payload=$(python3 -c 'import json,sys; print(json.dumps({"content": sys.argv[1]}))' "$text") ;;
+    *)
+      payload=$(python3 -c 'import json,sys; print(json.dumps({"text": sys.argv[1]}))' "$text") ;;
+  esac
+  curl -sS -m 15 -X POST -H 'Content-Type: application/json' -d "$payload" "$hook" >/dev/null 2>&1 || true
+}
+
+die()  { echo "${RED}✗${OFF} $*" >&2; alert "$*"; exit 1; }
 
 # .env is a key/value file, not a shell script. Sourcing it EXECUTES it, so a
 # value like `Biomedical Equipment & Supplies` backgrounds a process and tries
