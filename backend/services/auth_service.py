@@ -74,10 +74,13 @@ class AuthService:
 
     def login(
         self, email: str, password: str, *, ip: str = "", user_agent: str = ""
-    ) -> tuple[str, str | None, int]:
+    ) -> tuple[User, str, str | None, int]:
         """Authenticate and mint an access token, plus a refresh token.
 
-        Returns ``(access_token, refresh_token, expires_in_seconds)``.
+        Returns ``(user, access_token, refresh_token, expires_in_seconds)``.
+        The user comes back so the caller can attribute the audit entry: login
+        is unauthenticated, so nothing else knows who just succeeded, and
+        "who signed in and when" is the entry a security review asks for first.
         """
         user = self.authenticate(email, password)
         access = self._access_token(user)
@@ -86,7 +89,7 @@ class AuthService:
             # A new login starts a new family; existing sessions on other
             # devices are left alone.
             refresh = self._issue_refresh(user, str(uuid.uuid4()), ip, user_agent)
-        return access, refresh, settings.access_token_expire_minutes * 60
+        return user, access, refresh, settings.access_token_expire_minutes * 60
 
     # --- refresh ----------------------------------------------------------
     def refresh(

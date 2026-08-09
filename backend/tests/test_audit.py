@@ -130,3 +130,34 @@ def test_describe_turns_requests_into_stable_verbs():
     assert rid == "CHU Yaoundé"
     # A sub-resource action reads as its own verb rather than as an id.
     assert describe("POST", "/equipment/SN-1/install")[0] == "equipment.install"
+
+
+def test_a_successful_login_names_who_signed_in(client, admin_token):
+    """Login is unauthenticated, so no dependency identifies the actor.
+
+    Without the route publishing it, every sign-in was recorded against nobody
+    — and "who signed in, and when" is the first question asked of an audit log.
+    """
+    from tests.conftest import ADMIN_PASSWORD, login as do_login
+
+    do_login(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    events = _events(client, admin_token, action="auth.login", limit=20)
+    ok = [e for e in events if e["succeeded"]]
+    assert ok, "no successful login was recorded"
+    assert ok[0]["actor_email"] == ADMIN_EMAIL
+    assert ok[0]["actor_id"] is not None
+
+
+def test_a_failed_login_records_the_attempt_without_naming_a_user(
+    client, admin_token
+):
+    """A failed attempt has no authenticated actor, and must not invent one."""
+    client.post(
+        "/auth/login",
+        data={"username": ADMIN_EMAIL, "password": "definitely-wrong"},
+    )
+    events = _events(client, admin_token, action="auth.login", limit=20)
+    failed = [e for e in events if not e["succeeded"]]
+    assert failed, "a failed login left no trace"
+    assert failed[0]["status_code"] == 401
+    assert failed[0]["ip_address"] != ""

@@ -27,9 +27,17 @@ def login(
 ) -> Token:
     """OAuth2 password flow. `username` is the user's email."""
     ip, ua = _client(request)
-    access, refresh, expires_in = auth_service.login(
+    user, access, refresh, expires_in = auth_service.login(
         form_data.username, form_data.password, ip=ip, user_agent=ua
     )
+    # Name the actor on the audit entry. No dependency has run to identify them
+    # — that is the whole point of a login — so the route publishes it, the same
+    # way get_current_user does for authenticated requests.
+    request.scope["audit_actor"] = {
+        "id": user.id,
+        "email": user.email,
+        "role": str(user.role),
+    }
     return Token(access_token=access, refresh_token=refresh, expires_in=expires_in)
 
 
