@@ -74,6 +74,9 @@ Named volumes: `sites`, `logs`, `db-data`, `redis-cache-data`,
 | `ERPNEXT_API_KEY` / `_SECRET` | backend→ERPNext auth (User → Settings → API Access) |
 | `HTTP_PORT` / `HTTPS_PORT` / `ERPNEXT_PORT` | published ports (default 80 / 443 / 8080) |
 | `TENANCY_MODE` | `single` (default) or `multi` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | access-token lifetime (default 60) |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | session lifetime (default 30) |
+| `LOG_LEVEL` / `LOG_FORMAT` | `INFO` / `json` (use `text` for local dev) |
 | `CADDYFILE` | `Caddyfile` (default) or `Caddyfile.saas` |
 
 ### SaaS plane only

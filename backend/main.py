@@ -8,8 +8,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+from middleware.observability import AuditMiddleware, RequestContextMiddleware
+from utils.logging_config import configure_logging
 from fastapi.responses import JSONResponse
 
+from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.budget import router as budget_router
 from api.internal import router as internal_router
@@ -33,10 +37,12 @@ from api.users import router as users_router
 from config import settings
 from database import Base, SessionLocal, engine
 from integrations.erpnext import ERPNextError
+from models.audit import AuditEvent  # noqa: F401 (register table)
 from models.books_setup import BooksSetup  # noqa: F401 (register table)
 from models.branding import TenantBranding  # noqa: F401 (register table)
 from models.budget import Budget  # noqa: F401 (register table)
 from models.company_profile import CompanyProfile  # noqa: F401 (register table)
+from models.refresh_token import RefreshToken  # noqa: F401 (register table)
 from models.user import Role, User
 from repositories.branding_repository import BrandingRepository
 from repositories.company_repository import CompanyRepository
@@ -166,6 +172,10 @@ async def lifespan(app: FastAPI):
 def create_app(resolver: TenantResolver | None = None) -> FastAPI:
     """Build the app. ``resolver`` is injectable so tests can drive the
     multi-tenant path without a live control plane."""
+    # Before anything else, so startup itself is logged in the same shape as
+    # everything after it.
+    configure_logging(settings.log_level, settings.log_format)
+
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -181,15 +191,25 @@ def create_app(resolver: TenantResolver | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Added last so it wraps outermost and runs *first*: an unknown or
-    # suspended workspace is rejected before CORS, auth or the database.
+    # Middleware order is the point here. add_middleware wraps outermost, so
+    # the LAST call runs FIRST. The intended nesting is:
+    #
+    #   RequestContext  -> every request gets an id and log context, including
+    #                      ones the tenant layer rejects
+    #     Tenant        -> unknown/suspended workspaces rejected before auth
+    #       Audit       -> needs current_tenant(), so it runs inside the binding
+    #
+    # which means registering them in exactly the reverse of that order.
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(TenantMiddleware, resolver=resolver or build_resolver())
+    app.add_middleware(RequestContextMiddleware)
 
     async def erpnext_error_handler(request: Request, exc: ERPNextError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
 
     app.add_exception_handler(ERPNextError, erpnext_error_handler)
 
+    app.include_router(audit_router)
     app.include_router(health_router)
     app.include_router(internal_router)
     app.include_router(public_router)

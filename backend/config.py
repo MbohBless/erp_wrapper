@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    # Log level and shape. JSON by default because these are read by a log
+    # processor far more often than by a person; LOG_FORMAT=text for dev.
+    # Long enough that a working day does not interrupt a user, short enough
+    # that a stolen refresh token is not indefinite. Rotation on every use
+    # means a theft is usually detected long before this.
+    refresh_token_expire_days: int = 30
+    log_level: str = "INFO"
+    log_format: str = "json"
 
     # --- Initial administrator (seeded on startup if it does not exist) ---
     first_admin_email: str = "admin@equimed.cm"

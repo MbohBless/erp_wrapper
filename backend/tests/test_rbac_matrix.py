@@ -58,10 +58,17 @@ MATRIX: dict[tuple[str, str], object] = {
     # --- auth ---------------------------------------------------------------
     ("POST", "/auth/login"): PUBLIC,
     ("POST", "/auth/logout"): AUTHED,
+    # Unauthenticated on purpose: it is called exactly when the access token has
+    # expired. The refresh token is the credential, and it is single-use.
+    ("POST", "/auth/refresh"): PUBLIC,
     ("GET", "/auth/me"): AUTHED,
     # --- control plane ------------------------------------------------------
     ("POST", "/internal/tenants/{tenant_id}/bootstrap"): INTERNAL,
     ("DELETE", "/internal/tenants/{tenant_id}"): INTERNAL,
+    # --- audit --------------------------------------------------------------
+    # Administrator only: the audit log names who did what, and is the one place
+    # a compromised account's activity is visible.
+    ("GET", "/audit"): frozenset(),
     # --- users --------------------------------------------------------------
     ("GET", "/users"): frozenset(),  # Administrator only
     ("POST", "/users"): frozenset(),

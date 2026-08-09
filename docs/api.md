@@ -19,11 +19,16 @@ JWT bearer tokens (HS256). Log in with the OAuth2 *password* flow — the
 
 ```
 POST /api/auth/login          # form-encoded: username=<email>&password=<pw>
-  → 200 { "access_token": "<jwt>", "token_type": "bearer" }
+  → 200 { "access_token": "<jwt>", "refresh_token": "<opaque>",
+          "token_type": "bearer", "expires_in": 3600 }
 
+POST /api/auth/refresh        # { "refresh_token": "<opaque>" } → a new pair
 GET  /api/auth/me             # Authorization: Bearer <jwt>  → current user
-POST /api/auth/logout         # authenticated; stateless (client discards token)
+POST /api/auth/logout         # revokes the session server-side
 ```
+
+Sessions are renewed rather than expiring out from under the user — see
+[Authentication](#authentication-apiauth) below for the rotation rules.
 
 Send the token on every other request:
 
@@ -76,6 +81,53 @@ statically. On the SaaS plane:
 See [multi-tenancy.md](multi-tenancy.md).
 
 ---
+
+## Audit log  `/api/audit`  — *Administrator*
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/audit` | Filter by `actor_id`, `action`, `resource_type`, `succeeded`, `since`, `until`. `limit` ≤ 500. |
+
+Every state-changing request (`POST`/`PUT`/`PATCH`/`DELETE`) is recorded by
+middleware, so coverage does not depend on anyone remembering to call a logger.
+Each entry carries the actor (id, email, role at the time), a stable action verb
+(`customer.create`), the resource, status, outcome, client IP, user agent, a
+`request_id` matching the application logs, and a server-side UTC timestamp.
+
+**Refusals are recorded too** — a 403 is usually the entry worth reading.
+
+**Bodies are never stored.** They would carry passwords on `/auth` routes and
+customer data everywhere else, turning the audit trail into a second, less
+guarded copy of the database.
+
+**Append-only.** No route offers write, update or delete, and the repository has
+no such method. Reading the log is itself audited (`audit.read`).
+
+## Authentication  `/api/auth`
+
+| Method | Path | Access | Notes |
+| --- | --- | --- | --- |
+| POST | `/auth/login` | public | Returns `access_token`, `refresh_token`, `expires_in`. |
+| POST | `/auth/refresh` | public | Exchanges a refresh token for a new pair. |
+| POST | `/auth/logout` | authenticated | Revokes the session server-side. |
+| GET | `/auth/me` | authenticated | The current user. |
+
+Access tokens are JWTs valid for `ACCESS_TOKEN_EXPIRE_MINUTES` (default 60) and
+cannot be withdrawn early — which is why they are short-lived and why refresh
+tokens are **not** JWTs.
+
+Refresh tokens are opaque, stored as a SHA-256 hash, and **single-use**: every
+refresh rotates. Presenting an already-rotated token means two parties hold the
+same credential, so the entire rotation family is revoked — the safe reading of
+a replay is theft, and there is no way to tell which holder is the attacker.
+
+`REFRESH_TOKEN_EXPIRE_DAYS` (default 30) bounds a session; deactivating a user
+invalidates theirs immediately.
+
+> Clients must single-flight the refresh. When a token expires, every in-flight
+> request fails at once; independent refreshes would race, and since the tokens
+> are single-use the losers would look like reuse and revoke the session. The
+> web client does this in `lib/session.ts`.
 
 ## Public  `/api/public`  — *unauthenticated, tenant-scoped*
 

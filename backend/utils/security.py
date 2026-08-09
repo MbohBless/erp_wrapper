@@ -50,3 +50,29 @@ def decode_access_token(token: str) -> dict[str, Any]:
     return jwt.decode(
         token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
+
+
+# --- Refresh tokens -------------------------------------------------------
+def new_refresh_token() -> str:
+    """A high-entropy opaque token.
+
+    Not a JWT on purpose. A signed token cannot be withdrawn before it expires;
+    this one is a lookup key into a table we control, so a session can actually
+    be revoked.
+    """
+    import secrets
+
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """SHA-256, not bcrypt.
+
+    bcrypt is deliberately slow to make guessing a low-entropy password
+    expensive. This token has 384 bits of entropy — guessing is not the threat,
+    and every API call would pay the cost. What is needed is that the stored
+    form is useless if read, which a fast hash gives just as well.
+    """
+    import hashlib
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

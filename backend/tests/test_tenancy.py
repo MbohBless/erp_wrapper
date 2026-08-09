@@ -307,3 +307,47 @@ def test_public_branding_needs_no_token_but_needs_a_known_host(saas_app):
 
     unknown = host_client(saas_app, "nobody.equimed.test").get("/public/branding")
     assert unknown.status_code == 404
+
+
+def test_audit_log_never_crosses_tenants(saas_app):
+    """Required for every new tenant-scoped table (see CLAUDE.md).
+
+    The audit log is a particularly bad one to leak: it records who did what and
+    from which address, so a cross-tenant read hands over another customer's
+    staff list and activity pattern in one request.
+    """
+    bootstrap(saas_app, "acme", "audit-a@acme.example")
+    bootstrap(saas_app, "borealis", "audit-b@borealis.example")
+
+    token_a = login(saas_app, "acme.equimed.test", "audit-a@acme.example")
+    token_b = login(saas_app, "borealis.equimed.test", "audit-b@borealis.example")
+
+    # Generate a distinctive mutation in each workspace.
+    host_client(saas_app, "acme.equimed.test").post(
+        "/users",
+        json={"email": "made-in-acme@acme.example", "full_name": "A",
+              "role": "Sales", "password": "acmepass12345"},
+        headers=bearer(token_a),
+    )
+    host_client(saas_app, "borealis.equimed.test").post(
+        "/users",
+        json={"email": "made-in-borealis@borealis.example", "full_name": "B",
+              "role": "Sales", "password": "borealispass123"},
+        headers=bearer(token_b),
+    )
+
+    events_a = host_client(saas_app, "acme.equimed.test").get(
+        "/audit", headers=bearer(token_a)
+    )
+    assert events_a.status_code == 200, events_a.text
+    blob_a = str(events_a.json())
+    assert "acme.example" in blob_a
+    assert "borealis" not in blob_a, "acme can see borealis activity in the audit log"
+
+    events_b = host_client(saas_app, "borealis.equimed.test").get(
+        "/audit", headers=bearer(token_b)
+    )
+    assert events_b.status_code == 200
+    blob_b = str(events_b.json())
+    assert "borealis.example" in blob_b
+    assert "acme" not in blob_b, "borealis can see acme activity in the audit log"

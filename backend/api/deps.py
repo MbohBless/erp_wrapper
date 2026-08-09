@@ -3,7 +3,9 @@
 from collections.abc import Callable
 from typing import TypeVar
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
+
+from utils.logging_config import tenant_var, user_var
 from fastapi.security import OAuth2PasswordBearer
 from jwt import InvalidTokenError
 from sqlalchemy.orm import Session
@@ -11,6 +13,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role, User
+from repositories.audit_repository import AuditRepository
+from repositories.refresh_token_repository import RefreshTokenRepository
 from repositories.batch_repository import BatchRepository
 from repositories.branding_repository import BrandingRepository
 from repositories.company_repository import CompanyRepository
@@ -28,6 +32,7 @@ from repositories.stock_repository import StockRepository
 from repositories.supplier_repository import SupplierRepository
 from repositories.user_repository import UserRepository
 from repositories.warehouse_repository import WarehouseRepository
+from services.audit_service import AuditService
 from services.auth_service import AuthService
 from services.branding_service import BrandingService
 from services.company_service import CompanyService
@@ -87,6 +92,19 @@ def get_user_repository(
     return UserRepository(db, tenant_id)
 
 
+def get_audit_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> AuditRepository:
+    return AuditRepository(db, tenant_id)
+
+
+def get_audit_service(
+    repo: AuditRepository = Depends(get_audit_repository),
+) -> AuditService:
+    return AuditService(repo)
+
+
 def get_company_repository(
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
@@ -107,10 +125,18 @@ def get_user_service(
     return UserService(repo)
 
 
+def get_refresh_token_repository(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+) -> RefreshTokenRepository:
+    return RefreshTokenRepository(db, tenant_id)
+
+
 def get_auth_service(
     repo: UserRepository = Depends(get_user_repository),
+    refresh_repo: RefreshTokenRepository = Depends(get_refresh_token_repository),
 ) -> AuthService:
-    return AuthService(repo)
+    return AuthService(repo, refresh_repo)
 
 
 def get_company_service(
@@ -189,6 +215,7 @@ def get_report_service(
 
 # --- Authentication ---
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     repo: UserRepository = Depends(get_user_repository),
     tenant: TenantContext = Depends(get_tenant),
@@ -218,6 +245,20 @@ def get_current_user(
         raise credentials_exc
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Inactive user")
+
+    # The actor goes in the ASGI scope, NOT a ContextVar. This dependency is a
+    # plain `def`, so FastAPI runs it in a threadpool; a ContextVar set inside
+    # that worker thread is not visible back in the middleware that has to read
+    # it, and the audit row silently records an empty actor. The scope dict is
+    # the same object throughout the request, so a write here is seen there.
+    request.scope["audit_actor"] = {
+        "id": user.id,
+        "email": user.email,
+        "role": str(user.role),
+    }
+    # Best effort for log lines emitted during this request.
+    user_var.set(user.email)
+    tenant_var.set(tenant.id)
     return user
 
 
