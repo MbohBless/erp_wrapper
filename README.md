@@ -181,6 +181,7 @@ docker-compose.yml
 - **[docs/integrations.md](docs/integrations.md)** — add-on roadmap: e-invoicing,
   mobile money, WhatsApp, payroll — what to build, in what order, and why
 - **[docs/deployment.md](docs/deployment.md)** — Compose services, HTTPS, backups
+- **[docs/fresh-install.md](docs/fresh-install.md)** — handing a clean instance to a client, step by step
 - **[docs/coding_guidelines.md](docs/coding_guidelines.md)** — backend conventions
 
 ---
