@@ -354,6 +354,15 @@ app DB, never in ERPNext.
 | PUT | `/settings/company-profile` | Manager, Accountant | Full replacement of the editable fields. |
 | GET | `/settings/branding` | any authenticated | Application skin: product name, logos, theme tokens, dashboard layout. |
 | PUT | `/settings/branding` | Manager, Accountant · plan `branding` | Full replacement. Rejects anything not in the token allowlist. |
+
+
+> **`PUT /settings/branding` replaces the whole document.** `BrandingUpdate` has
+> the same shape as the read model, so any field absent from the body is written
+> as its default — an empty string — not left alone. Sending only
+> `{"light_tokens": …}` clears the app name, short name and tagline, which then
+> fall back to the `BRAND_*` environment defaults. Read the current branding,
+> modify it, and send it back whole. The web client already does this; the trap
+> is for anyone calling the API directly.
 | PUT | `/settings/branding/dashboard` | Manager, Accountant · plan `dashboard_layout` | Replace the dashboard widget composition. |
 | POST | `/settings/branding/dashboard/reset` | Manager, Accountant | Restore the default dashboard layout. |
 
