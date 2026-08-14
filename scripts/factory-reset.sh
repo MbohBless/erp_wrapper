@@ -49,6 +49,9 @@ DB_ROOT="$(env_get DB_ROOT_PASSWORD)"
 NEW_ADMIN_EMAIL="${NEW_ADMIN_EMAIL:-}"
 NEW_ADMIN_PASSWORD="${NEW_ADMIN_PASSWORD:-}"
 
+ASSUME_YES=0
+[ "${1:-}" = "--yes" ] && ASSUME_YES=1
+
 echo "${BOLD}FACTORY RESET${OFF}"
 echo
 echo "This will PERMANENTLY DESTROY, on $(hostname):"
@@ -58,26 +61,30 @@ echo
 echo "It will KEEP: .env secrets, R2 backups, TLS certificates, the firewall."
 echo
 echo "Current contents:"
-docker compose exec -T db sh -c "true" >/dev/null 2>&1 && {
-  DBN=$(docker compose exec -T erpnext-backend sh -c "cat sites/${SITE}/site_config.json" 2>/dev/null \
+docker compose exec -T db sh -c "true" >/dev/null 2>&1 </dev/null && {
+  DBN=$(docker compose exec -T erpnext-backend sh -c "cat sites/${SITE}/site_config.json" 2>/dev/null </dev/null \
         | python3 -c 'import sys,json; print(json.load(sys.stdin)["db_name"])' 2>/dev/null || echo "")
   if [ -n "$DBN" ]; then
-    CLI=$(docker compose exec -T db sh -c 'command -v mariadb || command -v mysql' | tr -d '\r')
+    CLI=$(docker compose exec -T db sh -c 'command -v mariadb || command -v mysql' </dev/null | tr -d '\r')
     docker compose exec -T db "$CLI" -uroot -p"$DB_ROOT" -N -B "$DBN" -e "
       select concat('  invoices=', (select count(*) from \`tabSales Invoice\`),
                     '  customers=', (select count(*) from tabCustomer),
                     '  items=', (select count(*) from tabItem),
-                    '  GL entries=', (select count(*) from \`tabGL Entry\`));" 2>/dev/null \
+                    '  GL entries=', (select count(*) from \`tabGL Entry\`));" 2>/dev/null </dev/null \
       | grep -v "Using a password" || true
   fi
 } || warn "stack not running; cannot show contents"
 echo
-printf "Type the site name (%s) to confirm: " "$SITE"
-read -r CONFIRM
-[ "$CONFIRM" = "$SITE" ] || die "confirmation did not match; nothing was changed."
-printf "Type ERASE to confirm again: "
-read -r CONFIRM2
-[ "$CONFIRM2" = "ERASE" ] || die "not confirmed; nothing was changed."
+if [ "$ASSUME_YES" -eq 1 ]; then
+  warn "--yes given: skipping confirmation"
+else
+  printf "Type the site name (%s) to confirm: " "$SITE"
+  read -r CONFIRM
+  [ "$CONFIRM" = "$SITE" ] || die "confirmation did not match; nothing was changed."
+  printf "Type ERASE to confirm again: "
+  read -r CONFIRM2
+  [ "$CONFIRM2" = "ERASE" ] || die "not confirmed; nothing was changed."
+fi
 
 # --- 1. final backup -----------------------------------------------------
 echo
@@ -87,6 +94,9 @@ if ./scripts/backup-remote.sh --force >/tmp/final-backup.log 2>&1; then
   grep -E "uploaded|retained" /tmp/final-backup.log | tail -2 || true
 else
   warn "the final backup FAILED. Read /tmp/final-backup.log before continuing."
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    die "the final backup failed and --yes was given; refusing to erase blind."
+  fi
   printf "Continue erasing anyway? [type YES]: "
   read -r ANY
   [ "$ANY" = "YES" ] || die "stopped; nothing was erased."
@@ -98,18 +108,18 @@ echo "dropping the ERPNext site…"
 # --force because the site is in use; --no-backup because we just took one.
 docker compose exec -T erpnext-backend bench drop-site "$SITE" \
   --db-root-username=root --db-root-password="$DB_ROOT" --force --no-backup \
-  >/dev/null 2>&1 || warn "bench drop-site reported an error; checking whether it went anyway"
+  >/dev/null 2>&1 </dev/null || warn "bench drop-site reported an error; checking whether it went anyway"
 
-if docker compose exec -T erpnext-backend sh -c "[ -d sites/${SITE} ]" 2>/dev/null; then
+if docker compose exec -T erpnext-backend sh -c "[ -d sites/${SITE} ]" 2>/dev/null </dev/null; then
   warn "the site directory still exists; removing it directly"
-  docker compose exec -T erpnext-backend sh -c "rm -rf sites/${SITE}"
+  docker compose exec -T erpnext-backend sh -c "rm -rf sites/${SITE}" </dev/null
 fi
 ok "ERPNext site removed"
 
 # --- 3. wipe the app database -------------------------------------------
 echo "wiping the application database…"
 docker compose exec -T backend sh -c "rm -f /app/data/app.db /app/data/app.db-wal /app/data/app.db-shm" \
-  2>/dev/null || warn "could not remove app.db (is the backend running?)"
+  2>/dev/null </dev/null || warn "could not remove app.db (is the backend running?)"
 ok "application database removed"
 
 # --- 4. new credentials, and clear the old site's API keys ---------------
@@ -131,7 +141,11 @@ ok "stale ERPNext API keys cleared (regenerate after the wizard)"
 # --- 5. recreate ---------------------------------------------------------
 echo
 echo "recreating the site (this takes several minutes)…"
-docker compose up -d erpnext-create-site >/dev/null 2>&1 || true
+# --force-recreate matters: the one-shot has already run once and exited, and
+# a plain `up` reports it up-to-date rather than running it again — leaving no
+# site and no error.
+docker compose rm -fs erpnext-create-site >/dev/null 2>&1 || true
+docker compose up -d --force-recreate erpnext-create-site >/dev/null 2>&1 || true
 for _ in $(seq 1 120); do
   line=$(docker compose ps -a --format json erpnext-create-site 2>/dev/null | head -1 || true)
   case "$line" in

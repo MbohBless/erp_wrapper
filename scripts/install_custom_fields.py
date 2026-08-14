@@ -18,9 +18,6 @@ Idempotent: create_custom_fields skips fields that already exist.
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
-log = []
-def note(msg): log.append(msg); print(msg)
-
 # ---------------------------------------------------------------- Custom fields
 DATA = {"fieldtype": "Data"}
 create_custom_fields({
@@ -56,7 +53,7 @@ create_custom_fields({
         {"fieldname": "custom_customer_signed", "label": "Customer Signed", "fieldtype": "Check", "insert_after": "custom_status"},
     ],
 })
-note("custom fields ok")
+print("custom fields ok")
 frappe.db.commit()
 frappe.clear_cache()
 print("DONE — custom fields installed")

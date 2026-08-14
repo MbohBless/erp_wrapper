@@ -50,10 +50,26 @@ empty site. It keeps your secrets, R2 backups, certificates and firewall rules.
 
 ## 2. ERPNext setup wizard
 
-The desk is not published to the internet, so reach it through an SSH tunnel:
+The production overlay does not publish the desk at all, so there is nothing to
+tunnel *to* yet. Publish it on the server's loopback first:
 
 ```bash
-ssh -L 8080:erpnext-nginx:8080 <host>     # leave this running
+# on the server
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+               -f docker-compose.desk.yml up -d erpnext-nginx
+
+# from your laptop
+ssh -L 8080:127.0.0.1:8080 <host>         # leave this running
+```
+
+> `127.0.0.1` is resolved **by the server**. A tunnel to `erpnext-nginx` fails
+> with *"Temporary failure in name resolution"* — that name exists only inside
+> the Docker network, not to the host's resolver.
+
+Put it back when the wizard and steps 3–4 are done:
+
+```bash
+docker compose up -d --force-recreate erpnext-nginx
 ```
 
 Open <http://localhost:8080>, sign in as `Administrator` with `ADMIN_PASSWORD`
@@ -66,9 +82,15 @@ from `.env`, and complete the wizard:
 | Time zone | Africa/Douala |
 | Currency | **XAF** |
 | Company Name | **Quality Biomedicals** |
-| Company Abbreviation | **QBM** ← check this before continuing |
+| Company Abbreviation | **check this before continuing** — see below |
 | Chart of Accounts | **SYSCOHADA** |
 | Fiscal year | 1 Jan – 31 Dec |
+
+> **ERPNext auto-fills the abbreviation from the company name and it is
+> `set_only_once`.** "Quality BioMedicals Sarl" yields `QBS`, "Quality
+> Biomedicals" yields `QB`. Whatever you want, type it explicitly before
+> continuing — it is suffixed onto every account, warehouse and cost-centre
+> name, and the only way to change it afterwards is another full reset.
 
 Building the SYSCOHADA chart takes a few minutes and creates ~1,400 accounts.
 
@@ -111,9 +133,13 @@ The script restores a conventional configuration; it is not accounting advice.
 
 ```bash
 docker compose cp scripts/install_custom_fields.py erpnext-backend:/tmp/cf.py
-echo 'exec(open("/tmp/cf.py").read())' \
+echo 'exec(open("/tmp/cf.py").read(), globals())' \
   | docker compose exec -T erpnext-backend bench --site "$SITE_NAME" console
 ```
+
+> Pass `globals()` to `exec`. Without it the source runs where locals and
+> globals differ, so a name bound at the top of the file is invisible to a
+> function defined below it — `NameError` on the script's own helpers.
 
 The API stores anything ERPNext has no native field for on a `custom_*` Custom
 Field — contact person, phone, manufacturer, selling price, ticket status.
