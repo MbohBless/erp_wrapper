@@ -14,18 +14,18 @@ Two of them can never be changed afterwards. Get them right the first time.
 
 | | Value | Changeable later? |
 | --- | --- | --- |
-| Company name | Quality Biomedicals | ✅ yes (`frappe.rename_doc`) |
-| **Company abbreviation** | **QBM** | ❌ **never** — `set_only_once` |
+| Company name | Quality BioMedicals Sarl | ✅ yes (`frappe.rename_doc`) |
+| **Company abbreviation** | **QBS** | ❌ **never** — `set_only_once` |
 | Country | Cameroon | ⚠️ painful |
 | Currency | XAF | ⚠️ painful |
 | **Chart of accounts** | **SYSCOHADA** | ❌ not once anything is posted |
 | Fiscal year start | 1 January | ⚠️ painful |
 
 > **The abbreviation is why a reset is sometimes the only option.** It is
-> suffixed onto every account name (`4111-Clients - QBM`), and ERPNext marks the
+> suffixed onto every account name (`4111-Clients - QBS`), and ERPNext marks the
 > field `set_only_once`. There is no rename utility and `Company.after_rename`
-> does not touch it. Choosing "TD" and wanting "QBM" later means doing all of
-> this again.
+> does not touch it — renaming the company leaves the old suffix on all 1,378
+> accounts. Getting it wrong means doing all of this again.
 
 ---
 
@@ -81,7 +81,7 @@ from `.env`, and complete the wizard:
 | Country | **Cameroon** |
 | Time zone | Africa/Douala |
 | Currency | **XAF** |
-| Company Name | **Quality Biomedicals** |
+| Company Name | **Quality BioMedicals Sarl** |
 | Company Abbreviation | **check this before continuing** — see below |
 | Chart of Accounts | **SYSCOHADA** |
 | Fiscal year | 1 Jan – 31 Dec |
