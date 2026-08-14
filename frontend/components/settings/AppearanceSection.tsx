@@ -30,6 +30,25 @@ import {
  * is surfaced inline rather than as a generic error.
  */
 
+// Mirrors the :root and :root[data-theme="dark"] blocks in app/globals.css.
+// Held explicitly rather than read with getComputedStyle: the dark column must
+// show dark defaults while the page itself is in light mode, and the computed
+// style only ever reflects the theme currently applied.
+const DEFAULT_TOKENS: Record<"light_tokens" | "dark_tokens", Record<string, string>> = {
+  light_tokens: {
+    "--color-accent": "#5980a6",
+    "--color-bg": "#f2f2f3",
+    "--color-surface": "#e9e9ea",
+    "--color-text": "#1d1f20",
+  },
+  dark_tokens: {
+    "--color-accent": "#8fb4d8",
+    "--color-bg": "#12171d",
+    "--color-surface": "#1a2129",
+    "--color-text": "#eef2f6",
+  },
+};
+
 const THEME_FIELDS: { token: string; label: string }[] = [
   { token: "--color-accent", label: "Accent" },
   { token: "--color-bg", label: "Background" },
@@ -227,11 +246,20 @@ export default function AppearanceSection({
                   <input
                     type="color"
                     className="w-9 h-9 rounded-lg border border-divider bg-transparent shrink-0 cursor-pointer disabled:cursor-not-allowed"
-                    value={form[mode][f.token] || "#000000"}
+                    // An unset token falls back to the stylesheet, so show
+                    // THAT — not #000000. `<input type="color">` has no empty
+                    // state, so a blank value renders black, which read as
+                    // "the background is black" when it was simply unset.
+                    value={form[mode][f.token] || DEFAULT_TOKENS[mode][f.token] || "#000000"}
                     disabled={!canEdit}
                     onChange={(e) => setToken(mode, f.token, e.target.value)}
                   />
-                  <span className="text-[13px] flex-1">{f.label}</span>
+                  <span className="text-[13px] flex-1">
+                    {f.label}
+                    {!form[mode][f.token] && (
+                      <span className="ml-1.5 text-[11px] muted-3">default</span>
+                    )}
+                  </span>
                   {form[mode][f.token] && canEdit && (
                     <button
                       type="button"
