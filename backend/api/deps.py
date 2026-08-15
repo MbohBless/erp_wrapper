@@ -14,6 +14,7 @@ from database import get_db
 from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role, User
 from repositories.audit_repository import AuditRepository
+from repositories.reference_repository import ReferenceRepository
 from repositories.refresh_token_repository import RefreshTokenRepository
 from repositories.batch_repository import BatchRepository
 from repositories.branding_repository import BrandingRepository
@@ -33,6 +34,7 @@ from repositories.supplier_repository import SupplierRepository
 from repositories.user_repository import UserRepository
 from repositories.warehouse_repository import WarehouseRepository
 from services.audit_service import AuditService
+from services.reference_service import ReferenceService
 from services.auth_service import AuthService
 from services.branding_service import BrandingService
 from services.company_service import CompanyService
@@ -168,7 +170,17 @@ def erpnext_service(
     return provider
 
 
-get_customer_service = erpnext_service(lambda c: CustomerService(CustomerRepository(c)))
+get_reference_service = erpnext_service(
+    lambda c: ReferenceService(ReferenceRepository(c))
+)
+
+# The customer service is handed the reference service so it can resolve a
+# customer group ERPNext will not accept — see CustomerService._usable_group.
+get_customer_service = erpnext_service(
+    lambda c: CustomerService(
+        CustomerRepository(c), ReferenceService(ReferenceRepository(c))
+    )
+)
 get_supplier_service = erpnext_service(lambda c: SupplierService(SupplierRepository(c)))
 get_product_service = erpnext_service(lambda c: ProductService(ProductRepository(c)))
 get_sales_service = erpnext_service(lambda c: SalesService(SalesRepository(c)))

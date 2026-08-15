@@ -75,6 +75,10 @@ MATRIX: dict[tuple[str, str], object] = {
     ("PUT", "/users/{user_id}"): frozenset(),
     ("DELETE", "/users/{user_id}"): frozenset(),
     ("GET", "/users/{user_id}"): SELF_OR_ADMIN,
+    # --- reference data for form pickers -------------------------------------
+    # Taxonomy labels only ("Commercial", "Cameroon", "Nos"); every form that
+    # uses one is guarded on its own write.
+    ("GET", "/reference/options"): AUTHED,
     # --- dashboard ----------------------------------------------------------
     ("GET", "/dashboard"): AUTHED,
     # --- catalogue ----------------------------------------------------------

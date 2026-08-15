@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import DocFormShell, { DOC_FIELD, DOC_GRID, DOC_LABEL } from "@/components/ui/DocFormShell";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useReferenceOptions } from "@/lib/reference";
 import {
   type Customer,
   type CustomerInput,
@@ -19,6 +20,7 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
   const editing = !!initial;
   const { token } = useAuth();
   const { t } = useI18n();
+  const { options } = useReferenceOptions();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -27,8 +29,10 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
   const [form, setForm] = useState<CustomerInput>({
     name: initial?.name ?? "",
     customer_type: initial?.customer_type ?? "Company",
-    customer_group: initial?.customer_group ?? "All Customer Groups",
-    territory: initial?.territory ?? "All Territories",
+    // Empty, not the tree roots: those are exactly the values ERPNext refuses.
+    // The server fills a sensible group when this is left blank.
+    customer_group: initial?.customer_group ?? "",
+    territory: initial?.territory ?? "",
     contact_person: initial?.contact_person ?? "",
     phone: initial?.phone ?? "",
     email: initial?.email ?? "",
@@ -66,6 +70,14 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
     if (!form.name.trim()) {
       setError(t("customers.error.nameRequired"));
       setTab("details");
+      return;
+    }
+    // Required, even though the server can substitute one. The revenue-by-
+    // segment chart is built from this field, so a guessed group files the
+    // customer under the wrong segment and quietly skews the reporting.
+    if (!form.customer_group) {
+      setError(t("customers.error.groupRequired"));
+      setTab("more");
       return;
     }
     save.mutate();
@@ -137,19 +149,32 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
         <div className={DOC_GRID}>
           <div>
             <label className={DOC_LABEL}>{t("customers.field.customerGroup")}</label>
-            <input
+            {/* A select, not free text: ERPNext accepts only these values, and
+                the previous default ("All Customer Groups") was a tree root it
+                refuses outright — every create from this form failed. */}
+            <select
               className={DOC_FIELD}
               value={form.customer_group ?? ""}
               onChange={(e) => set("customer_group", e.target.value)}
-            />
+            >
+              <option value="">{t("common.choose")}</option>
+              {(options?.customer_groups ?? []).map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={DOC_LABEL}>{t("customers.field.territory")}</label>
-            <input
+            <select
               className={DOC_FIELD}
               value={form.territory ?? ""}
               onChange={(e) => set("territory", e.target.value)}
-            />
+            >
+              <option value="">{t("common.choose")}</option>
+              {(options?.territories ?? []).map((tr) => (
+                <option key={tr} value={tr}>{tr}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={DOC_LABEL}>{t("customers.field.contactPerson")}</label>

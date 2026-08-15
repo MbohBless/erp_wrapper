@@ -18,6 +18,7 @@ from api.auth import router as auth_router
 from api.budget import router as budget_router
 from api.internal import router as internal_router
 from api.public import router as public_router
+from api.reference import router as reference_router
 from api.customers import router as customers_router
 from api.dashboard import router as dashboard_router
 from api.equipment import router as equipment_router
@@ -210,6 +211,7 @@ def create_app(resolver: TenantResolver | None = None) -> FastAPI:
     app.add_exception_handler(ERPNextError, erpnext_error_handler)
 
     app.include_router(audit_router)
+    app.include_router(reference_router)
     app.include_router(health_router)
     app.include_router(internal_router)
     app.include_router(public_router)

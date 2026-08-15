@@ -13,7 +13,10 @@ CustomerType = Literal["Company", "Individual"]
 
 class CustomerBase(BaseModel):
     name: str = Field(min_length=1, max_length=140)
-    customer_group: str = "All Customer Groups"
+    # NOT "All Customer Groups". That is the tree root, and ERPNext refuses a
+    # group node on a transaction — defaulting to it made every create from the
+    # form fail. None means "pick a selectable one for me"; see CustomerService.
+    customer_group: str | None = None
     customer_type: CustomerType = "Company"
     territory: str = "All Territories"
     contact_person: str | None = Field(default=None, max_length=140)
