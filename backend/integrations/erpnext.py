@@ -323,6 +323,7 @@ async def create_opening_invoice(
     item_code: str,
     offset_account: str,   # balance-sheet account the opening balance offsets to
     bill_no: str | None = None,
+    remarks: str | None = None,
 ) -> dict:
     """Create + submit an *opening* invoice (is_opening) so a pre-existing debt
     shows in the AR/AP ledger and can be paid off. Posts party ⇄ offset_account.
@@ -340,6 +341,8 @@ async def create_opening_invoice(
         "items": [line],
     }
     payload["customer" if is_sales else "supplier"] = party
+    if remarks:
+        payload["remarks"] = remarks
     if bill_no and not is_sales:
         payload["bill_no"] = bill_no
     doc = await client.create_document(doctype, payload)

@@ -14,6 +14,7 @@ from integrations.erpnext import ERPNextClient, get_erpnext_client
 from models.user import Role
 from repositories.books_setup_repository import BooksSetupRepository
 from repositories.budget_repository import BudgetRepository
+from repositories.reference_repository import ReferenceRepository
 from repositories.setup_repository import SetupRepository
 from schemas.setup import OpeningBalancesInput, SetupStatus
 from services.setup_service import SetupService
@@ -32,6 +33,7 @@ def get_setup_service(
         SetupRepository(client),
         BooksSetupRepository(db, tenant_id),
         BudgetRepository(db, tenant_id),
+        ReferenceRepository(client),
     )
 
 

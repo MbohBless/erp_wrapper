@@ -51,3 +51,17 @@ class ReferenceRepository:
             "UOM", fields=["name"], limit=limit, order_by="name asc"
         )
         return [d["name"] for d in docs if d.get("name")]
+
+    async def active_fiscal_years(self) -> list[dict]:
+        """Enabled fiscal years, with their bounds.
+
+        The books-setup wizard needs these to explain a date that ERPNext will
+        refuse before it tries to post one.
+        """
+        return await self.client.list_documents(
+            "Fiscal Year",
+            fields=["name", "year_start_date", "year_end_date"],
+            filters=[["disabled", "=", 0]],
+            limit=50,
+            order_by="year_start_date asc",
+        )

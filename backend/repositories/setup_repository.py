@@ -27,6 +27,22 @@ _PREFIX = {
 }
 
 
+
+def _opening_note(reference: str | None, original_date: str | None) -> str:
+    """Preserve what the posting date can no longer carry.
+
+    Opening documents are posted on the cutover date, so the date the original
+    invoice was actually raised would otherwise be lost. It is often the only
+    way to tie the entry back to the customer's own paperwork.
+    """
+    bits = ["Opening balance (first-time setup)"]
+    if reference:
+        bits.append(f"ref {reference}")
+    if original_date:
+        bits.append(f"originally dated {original_date}")
+    return " — ".join(bits)
+
+
 class SetupRepository:
     def __init__(self, client: ERPNextClient) -> None:
         self.client = client
@@ -99,16 +115,30 @@ class SetupRepository:
 
         # ---- open receivables / payables as opening invoices ----
         if item:
+            # Opening documents post ON the start date, not on the date the
+            # original invoice was raised.
+            #
+            # An opening receivable is, by definition, a debt outstanding at the
+            # cutover — so it was raised BEFORE it, usually in the previous year.
+            # Posting it on that original date fails: ERPNext refuses any date
+            # outside an active Fiscal Year, and a first-time setup has only the
+            # current year. The wizard was therefore unusable for exactly the
+            # case it exists for.
+            #
+            # The original date is kept in the remark, and the DUE date is passed
+            # through untouched, so ageing still reflects the real terms.
             for r in data.receivables:
                 await create_opening_invoice(
                     self.client, doctype="Sales Invoice", company=company, party=r.party,
-                    posting_date=r.date or sd, due_date=r.due_date or r.date or sd,
+                    posting_date=sd, due_date=r.due_date or r.date or sd,
                     amount=r.amount, item_code=item, offset_account=offset,
+                    remarks=_opening_note(r.reference, r.date),
                 )
             for p in data.payables:
                 await create_opening_invoice(
                     self.client, doctype="Purchase Invoice", company=company, party=p.party,
-                    posting_date=p.date or sd, due_date=p.due_date or p.date or sd,
-                    amount=p.amount, item_code=item, offset_account=offset, bill_no=p.reference,
+                    posting_date=sd, due_date=p.due_date or p.date or sd,
+                    amount=p.amount, item_code=item, offset_account=offset,
+                    bill_no=p.reference, remarks=_opening_note(p.reference, p.date),
                 )
         return opening_ref
