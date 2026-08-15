@@ -1,6 +1,7 @@
 // Customers module: list page, form and detail drawer.
 export const customers = {
   en: {
+    "customers.type.hint": "ERPNext accounting distinction. Leave as Company unless billing a private individual.",
     "customers.error.groupRequired": "Choose a customer type.",
     "customers.title": "Customers",
     "customers.subtitle": "Hospital, clinic and pharmacy accounts",
@@ -47,6 +48,7 @@ export const customers = {
     "customers.detail.address": "Address",
   },
   fr: {
+    "customers.type.hint": "Distinction comptable ERPNext. Laissez sur Entreprise sauf pour un particulier.",
     "customers.error.groupRequired": "Choisissez un type de client.",
     "customers.title": "Clients",
     "customers.subtitle": "Comptes hôpitaux, cliniques et pharmacies",

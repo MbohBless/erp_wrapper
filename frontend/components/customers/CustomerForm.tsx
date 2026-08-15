@@ -77,7 +77,7 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
     // customer under the wrong segment and quietly skews the reporting.
     if (!form.customer_group) {
       setError(t("customers.error.groupRequired"));
-      setTab("more");
+      setTab("details");
       return;
     }
     save.mutate();
@@ -115,14 +115,21 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
             />
           </div>
           <div>
-            <label className={DOC_LABEL}>{t("customers.field.type")}</label>
+            <label className={DOC_LABEL}>{t("customers.field.customerGroup")} *</label>
+            {/* On the first tab because this is the field every user sets, and
+                the revenue-by-segment chart is built from it. A select, not free
+                text: ERPNext accepts only these, and the old default was a tree
+                root it refuses outright — which broke every create. */}
             <select
               className={DOC_FIELD}
-              value={form.customer_type}
-              onChange={(e) => set("customer_type", e.target.value as CustomerType)}
+              value={form.customer_group ?? ""}
+              onChange={(e) => set("customer_group", e.target.value)}
+              required
             >
-              <option value="Company">{t("customers.type.company")}</option>
-              <option value="Individual">{t("customers.type.individual")}</option>
+              <option value="">{t("common.choose")}</option>
+              {(options?.customer_groups ?? []).map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -148,20 +155,18 @@ export default function CustomerForm({ initial }: { initial?: Customer | null })
       {tab === "more" && (
         <div className={DOC_GRID}>
           <div>
-            <label className={DOC_LABEL}>{t("customers.field.customerGroup")}</label>
-            {/* A select, not free text: ERPNext accepts only these values, and
-                the previous default ("All Customer Groups") was a tree root it
-                refuses outright — every create from this form failed. */}
+            <label className={DOC_LABEL}>{t("customers.field.type")}</label>
             <select
               className={DOC_FIELD}
-              value={form.customer_group ?? ""}
-              onChange={(e) => set("customer_group", e.target.value)}
+              value={form.customer_type}
+              onChange={(e) => set("customer_type", e.target.value as CustomerType)}
             >
-              <option value="">{t("common.choose")}</option>
-              {(options?.customer_groups ?? []).map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
+              <option value="Company">{t("customers.type.company")}</option>
+              <option value="Individual">{t("customers.type.individual")}</option>
             </select>
+            <div className="text-[12px] muted mt-1">
+              {t("customers.type.hint")}
+            </div>
           </div>
           <div>
             <label className={DOC_LABEL}>{t("customers.field.territory")}</label>
