@@ -138,12 +138,24 @@ function StockEntryForm() {
             <label className={DOC_LABEL}>{t("inventory.entryType")}</label>
             <input className={`${DOC_FIELD} opacity-70`} value={receiving ? t("inventory.materialReceipt") : t("inventory.materialIssue")} disabled />
           </div>
+          {/* With a single stock location there is nothing to decide, so the
+              field is shown read-only rather than as a select of one. It
+              becomes a real picker again the moment a second warehouse exists —
+              no deploy needed, the list comes from ERPNext. */}
           <div className="md:col-span-2">
             <label className={DOC_LABEL}>{receiving ? t("inventory.targetWarehouse") : t("inventory.sourceWarehouse")} *</label>
-            <select className={DOC_FIELD} value={warehouse} onChange={(e) => setWarehouse(e.target.value)} required>
-              <option value="">{t("inventory.selectWarehouse")}</option>
-              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            {warehouses.length <= 1 ? (
+              <input
+                className={`${DOC_FIELD} opacity-70`}
+                value={warehouses[0]?.name ?? t("inventory.selectWarehouse")}
+                disabled
+              />
+            ) : (
+              <select className={DOC_FIELD} value={warehouse} onChange={(e) => setWarehouse(e.target.value)} required>
+                <option value="">{t("inventory.selectWarehouse")}</option>
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            )}
           </div>
         </div>
       )}

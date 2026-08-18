@@ -120,6 +120,11 @@ export default function SupplierForm({ initial }: { initial?: Supplier | null })
             <label className={DOC_LABEL}>{t("suppliers.field.email")}</label>
             <input className={DOC_FIELD} type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
           </div>
+
+          <div className="md:col-span-2">
+            <label className={DOC_LABEL}>{t("suppliers.field.address")}</label>
+            <textarea className={`${DOC_FIELD} min-h-[80px] resize-y`} value={form.address} onChange={(e) => set("address", e.target.value)} />
+          </div>
         </div>
       )}
 
@@ -140,10 +145,6 @@ export default function SupplierForm({ initial }: { initial?: Supplier | null })
           <div>
             <label className={DOC_LABEL}>{t("suppliers.field.taxId")}</label>
             <input className={DOC_FIELD} value={form.tax_id} onChange={(e) => set("tax_id", e.target.value)} />
-          </div>
-          <div className="md:col-span-2">
-            <label className={DOC_LABEL}>{t("suppliers.field.address")}</label>
-            <textarea className={`${DOC_FIELD} min-h-[80px] resize-y`} value={form.address} onChange={(e) => set("address", e.target.value)} />
           </div>
           <label className="md:col-span-2 flex items-center gap-2.5 text-sm cursor-pointer">
             <input type="checkbox" checked={form.disabled} onChange={(e) => set("disabled", e.target.checked)} />

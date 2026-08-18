@@ -43,7 +43,14 @@ class ReferenceRepository:
         return await self._leaves("Item Group")
 
     async def warehouses(self) -> list[str]:
-        return await self._leaves("Warehouse")
+        docs = await self.client.list_documents(
+            "Warehouse",
+            fields=["name"],
+            filters=[["is_group", "=", 0], ["disabled", "=", 0]],
+            limit=200,
+            order_by="name asc",
+        )
+        return [d["name"] for d in docs if d.get("name")]
 
     async def uoms(self, limit: int = 200) -> list[str]:
         # UOM is not a tree, so there is no is_group to filter on.
