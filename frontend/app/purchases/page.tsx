@@ -17,7 +17,12 @@ import { useDebounced } from "@/components/ui/hooks";
 import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { type PurchaseInvoice, listPurchases } from "@/lib/purchases";
+import {
+  amendBlockedReason,
+  type PurchaseInvoice,
+  listPurchases,
+} from "@/lib/purchases";
+import { useRole } from "@/lib/role";
 import { useAppName } from "@/lib/branding";
 
 export default function PurchasesPage() {
@@ -33,6 +38,7 @@ function PurchasesContent() {
   const appName = useAppName();
   const { t } = useI18n();
   const { token, logout } = useAuth();
+  const { role } = useRole();
   const qc = useQueryClient();
   const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
@@ -42,6 +48,12 @@ function PurchasesContent() {
   const [payError, setPayError] = useState<string | null>(null);
 
   const search = useDebounced(searchInput);
+
+  // Manager/Administrator only — see the sales list for why.
+  const mayAmend = role === "Administrator" || role === "Manager";
+  const amendable = (bill: PurchaseInvoice) => mayAmend && !amendBlockedReason(bill);
+  const editBill = (bill: PurchaseInvoice) =>
+    router.push(`/purchases/${encodeURIComponent(bill.id)}/edit`);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["purchases", search],
@@ -180,7 +192,10 @@ function PurchasesContent() {
                       <StatusTag label={bill.status} tone={invoiceTone(bill.status)} />
                     </td>
                     <td className="py-3 pr-4">
-                      <RowActions onView={() => setViewing(bill)} />
+                      <RowActions
+                        onView={() => setViewing(bill)}
+                        onEdit={amendable(bill) ? () => editBill(bill) : undefined}
+                      />
                     </td>
                   </tr>
                 ))
@@ -194,6 +209,7 @@ function PurchasesContent() {
         <BillDrawer
           bill={viewing}
           onClose={() => setViewing(null)}
+          onEdit={mayAmend ? () => editBill(viewing) : undefined}
           onRecordPayment={() => {
             setPayError(null);
             setPaying(viewing);

@@ -144,6 +144,25 @@ class ERPNextClient:
         )
         return resp.json().get("message", doc)
 
+    async def cancel_document(self, doctype: str, name: str) -> dict:
+        """Cancel a submitted document (docstatus 1 -> 2), reversing its ledger.
+
+        ERPNext offers no other way to change a posted document: submitted
+        fields are immutable, so a correction is always cancel-then-amend.
+
+        The cancel is refused outright when something else points at the
+        document — an allocated Payment Entry, a Delivery Note, a return — and
+        that refusal arrives here as an ERPNextError carrying ERPNext's own
+        wording. Callers should rule out the common cases *before* calling, or
+        the caller gets an opaque 502 for a situation that had a plain answer.
+        """
+        resp = await self._request(
+            "POST",
+            "/api/method/frappe.client.cancel",
+            json={"doctype": doctype, "name": name},
+        )
+        return resp.json().get("message", {})
+
     async def run_report(self, report_name: str, filters: dict | None = None) -> dict:
         """Run an ERPNext Query Report (e.g. financial statements)."""
         params: dict[str, Any] = {"report_name": report_name}
@@ -228,11 +247,13 @@ async def create_invoice(
     remarks: str | None = None,
     update_stock: bool = False,
     taxes_and_charges: str | None = None,
+    amended_from: str | None = None,
     submit: bool = True,
 ) -> dict:
     """Create a Sales Invoice. `items`: [{"item_code", "qty", "rate"}, ...].
 
-    Submitted by default so it posts to the ledger.
+    Submitted by default so it posts to the ledger. Pass `amended_from` with the
+    name of an already-cancelled invoice to post this one as its replacement.
     """
     payload: dict[str, Any] = {"customer": customer, "items": items}
     if due_date:
@@ -250,6 +271,11 @@ async def create_invoice(
         payload["update_stock"] = 1
     if taxes_and_charges:
         payload["taxes_and_charges"] = taxes_and_charges
+    if amended_from:
+        # An amendment is a *new* document standing in for a cancelled one.
+        # ERPNext names it "<original>-1" and rejects the link unless the
+        # original is already at docstatus 2, so cancel first, then create.
+        payload["amended_from"] = amended_from
     doc = await client.create_document("Sales Invoice", payload)
     if submit:
         doc = await client.submit_document("Sales Invoice", doc["name"])
@@ -264,11 +290,13 @@ async def create_purchase(
     bill_no: str | None = None,
     posting_date: str | None = None,
     remarks: str | None = None,
+    amended_from: str | None = None,
     submit: bool = True,
 ) -> dict:
     """Create a Purchase Invoice (supplier bill). `items`: [{"item_code", "qty", "rate"}, ...].
 
-    Submitted by default so it posts to the ledger.
+    Submitted by default so it posts to the ledger. Pass `amended_from` with the
+    name of an already-cancelled bill to post this one as its replacement.
     """
     payload: dict[str, Any] = {"supplier": supplier, "items": items}
     if bill_no:
@@ -282,6 +310,11 @@ async def create_purchase(
         payload["set_posting_time"] = 1
     if remarks:
         payload["remarks"] = remarks
+    if amended_from:
+        # An amendment is a *new* document standing in for a cancelled one.
+        # ERPNext names it "<original>-1" and rejects the link unless the
+        # original is already at docstatus 2, so cancel first, then create.
+        payload["amended_from"] = amended_from
     doc = await client.create_document("Purchase Invoice", payload)
     if submit:
         doc = await client.submit_document("Purchase Invoice", doc["name"])

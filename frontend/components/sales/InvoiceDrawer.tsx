@@ -9,16 +9,21 @@ import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { SalesInvoice } from "@/lib/sales";
+import { amendBlockedReason, type SalesInvoice } from "@/lib/sales";
 
 export default function InvoiceDrawer({
   invoice,
   onClose,
   onRecordPayment,
+  onEdit,
 }: {
   invoice: SalesInvoice;
   onClose: () => void;
   onRecordPayment?: () => void;
+  /** Offered to Manager/Administrator, and only while the invoice can still be
+   * corrected. Absent means either "not your role" or "not this invoice" — the
+   * note below the totals says which. */
+  onEdit?: () => void;
 }) {
   const { t } = useI18n();
   // The invoice handed in came from the LIST, and an ERPNext list query cannot
@@ -33,11 +38,22 @@ export default function InvoiceDrawer({
     staleTime: 30_000,
   });
   const lines = full?.items ?? invoice.items;
+  const blocked = amendBlockedReason(full ?? invoice);
+  const canPay = onRecordPayment && invoice.outstanding_amount > 0;
   const footer =
-    onRecordPayment && invoice.outstanding_amount > 0 ? (
-      <button type="button" onClick={onRecordPayment} className="btn btn-filled">
-        {t("sales.recordReceipt")}
-      </button>
+    onEdit || canPay ? (
+      <div className="flex items-center gap-2.5">
+        {onEdit && !blocked && (
+          <button type="button" onClick={onEdit} className="btn">
+            {t("sales.amend.action")}
+          </button>
+        )}
+        {canPay && (
+          <button type="button" onClick={onRecordPayment} className="btn btn-filled">
+            {t("sales.recordReceipt")}
+          </button>
+        )}
+      </div>
     ) : undefined;
   return (
     <Drawer
@@ -76,6 +92,18 @@ export default function InvoiceDrawer({
         <span className="muted">{t("sales.outstanding")}</span>
         <span className="font-semibold">{xaf(invoice.outstanding_amount)}</span>
       </div>
+
+      {invoice.amended_from && (
+        <div className="mt-4 text-[13px] muted">
+          {t("sales.amend.replaces").replace("{id}", invoice.amended_from)}
+        </div>
+      )}
+
+      {onEdit && blocked && (
+        <div className="mt-4 text-[13px] muted">
+          {t(blocked === "opening" ? "sales.amend.blockedOpening" : "sales.amend.blockedSettled")}
+        </div>
+      )}
 
       {invoice.remarks && (
         <div className="mt-5">

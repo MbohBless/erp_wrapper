@@ -142,6 +142,12 @@ Traps, each of which has already cost a production bug:
 - **List queries do not return child tables.** `GET /sales` cannot include line
   items; a detail view must fetch the document by id. Totals still look right,
   which makes this read as a display glitch rather than missing data.
+- **A submitted document cannot be edited, only cancelled and amended.** The
+  fake happily mutates a doc at `docstatus = 1`; ERPNext refuses everything but
+  `allow_on_submit` fields. Correcting an invoice means cancel + re-post with
+  `amended_from`, which **changes its number** (`…-00007` → `…-00007-1`) and is
+  two calls, not one transaction. Cancel is itself refused once a payment is
+  allocated. See `SalesRepository.amend`.
 - **The setup wizard leaves the company unusable.** Default accounts are unset or
   matched by number prefix (the receivable control came out as an accrued-interest
   account). Run `scripts/configure_company_accounts.py` on every new site — see

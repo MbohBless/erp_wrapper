@@ -235,27 +235,58 @@ Movement body: `{ warehouse, items: [{ item_code, qty, batch_no?, rate? }] }`.
 
 ## Sales  `/api/sales`  → ERPNext `Sales Invoice`
 
-- **view:** Manager, Sales, Accountant · **manage (create):** Manager, Sales
+- **view:** Manager, Sales, Accountant · **create:** Manager, Sales ·
+  **amend (edit a posted invoice):** Manager
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/sales` | query: `search` (customer), `status`, `limit`, `start` |
+| GET | `/sales` | query: `search` (customer), `status`, `limit`, `start`. Cancelled invoices are excluded |
 | POST | `/sales` | create **+ submit** to the ledger |
 | GET | `/sales/{id}` | invoice with line items |
+| PUT | `/sales/{id}` | **cancel + amend** — see below. Returns the *replacement*, under a new id |
 
-Create body: `{ customer, items: [{ item_code, qty, rate }], due_date? }`.
+Create body: `{ customer, items: [{ item_code, qty, rate }], due_date?,
+posting_date?, remarks?, update_stock?, taxes_and_charges? }`.
+
+`SalesInvoice` also returns `update_stock`, `taxes_and_charges`, `amended_from`,
+`is_cancelled` and `is_opening`.
+
+### Editing a posted invoice
+
+ERPNext has no in-place update for a submitted document, so `PUT /sales/{id}`
+**cancels** the invoice and posts a corrected copy in its place:
+
+- **The invoice number changes.** `ACC-SINV-2026-00007` is replaced by
+  `ACC-SINV-2026-00007-1`. Read the id back from the response; the id in the
+  path now names a cancelled document.
+- **The body replaces the whole document.** An omitted field is written empty,
+  not preserved — leave out `taxes_and_charges` and the VAT comes off the
+  invoice; leave out `update_stock` and the cancel returns the goods to stock
+  without the replacement taking them out again.
+- **The original is kept, reversed.** It carries `is_cancelled`, and the
+  replacement points back at it through `amended_from`. Listing excludes
+  cancelled invoices so one sale is not shown twice.
+- **Refused with 409** when the invoice is an opening balance from the
+  first-time books setup, or when a payment has already been received against
+  it (cancel the payment, or raise a credit note). Both are checked *before*
+  anything is cancelled.
+- **Resumable.** The cancel and the re-post are two calls, not one transaction.
+  If the second fails, calling `PUT` again finishes the job; it returns the
+  existing replacement rather than posting a second one.
 
 ---
 
 ## Purchases  `/api/purchases`  → ERPNext `Purchase Invoice`
 
-- **view:** Manager, Accountant, Store Keeper · **manage (create):** Manager
+- **view:** Manager, Accountant, Store Keeper · **create:** Manager ·
+  **amend (edit a posted bill):** Manager
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/purchases` | query: `search` (supplier), `status`, `limit`, `start` |
+| GET | `/purchases` | query: `search` (supplier), `status`, `limit`, `start`. Cancelled bills are excluded |
 | POST | `/purchases` | create + submit; body `{ supplier, items, bill_no?, posting_date? }` |
 | GET | `/purchases/{id}` | bill with line items |
+| PUT | `/purchases/{id}` | cancel + amend, identical semantics to `PUT /sales/{id}` above |
 
 ---
 

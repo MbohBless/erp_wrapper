@@ -17,6 +17,15 @@ class PurchaseInvoiceCreate(BaseModel):
     remarks: str | None = None
 
 
+class PurchaseInvoiceUpdate(PurchaseInvoiceCreate):
+    """Replaces a *posted* supplier bill wholesale.
+
+    A submitted Purchase Invoice is immutable in ERPNext, so this is applied as
+    cancel-then-amend: every field is rewritten from this payload exactly as a
+    create would write it, and an omitted field is cleared rather than kept.
+    """
+
+
 class BillLine(BaseModel):
     item_code: str
     qty: float
@@ -35,3 +44,8 @@ class PurchaseInvoiceRead(BaseModel):
     status: str
     remarks: str | None = None
     items: list[BillLine] = []
+    # See schemas/sales.py for what these three carry — the amendment lineage
+    # is identical on both invoice types.
+    amended_from: str | None = None
+    is_cancelled: bool = False
+    is_opening: bool = False

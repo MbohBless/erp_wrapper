@@ -115,9 +115,14 @@ MATRIX: dict[tuple[str, str], object] = {
     ("GET", "/sales"): frozenset({M, S, C}),
     ("GET", "/sales/{invoice_id}"): frozenset({M, S, C}),
     ("POST", "/sales"): frozenset({M, S}),
+    # Editing a posted invoice cancels it and re-posts a replacement, moving
+    # money already in the ledger. Sales may raise one; only a Manager may
+    # unwind one.
+    ("PUT", "/sales/{invoice_id}"): frozenset({M}),
     ("GET", "/purchases"): frozenset({M, K, C}),
     ("GET", "/purchases/{bill_id}"): frozenset({M, K, C}),
     ("POST", "/purchases"): frozenset({M}),
+    ("PUT", "/purchases/{bill_id}"): frozenset({M}),
     # --- equipment ----------------------------------------------------------
     ("GET", "/equipment"): frozenset({M, S, K, B}),
     ("GET", "/equipment/{equipment_id}"): frozenset({M, S, K, B}),

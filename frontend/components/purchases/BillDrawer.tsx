@@ -9,16 +9,20 @@ import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { PurchaseInvoice } from "@/lib/purchases";
+import { amendBlockedReason, type PurchaseInvoice } from "@/lib/purchases";
 
 export default function BillDrawer({
   bill,
   onClose,
   onRecordPayment,
+  onEdit,
 }: {
   bill: PurchaseInvoice;
   onClose: () => void;
   onRecordPayment?: () => void;
+  /** Manager/Administrator only, and only while the bill can still be
+   * corrected. See the sales drawer. */
+  onEdit?: () => void;
 }) {
   const { t } = useI18n();
   // Same as the sales drawer: the bill came from the list, whose items are
@@ -31,11 +35,22 @@ export default function BillDrawer({
     staleTime: 30_000,
   });
   const lines = full?.items ?? bill.items;
+  const blocked = amendBlockedReason(full ?? bill);
+  const canPay = onRecordPayment && bill.outstanding_amount > 0;
   const footer =
-    onRecordPayment && bill.outstanding_amount > 0 ? (
-      <button type="button" onClick={onRecordPayment} className="btn btn-filled">
-        {t("purchases.recordPayment")}
-      </button>
+    onEdit || canPay ? (
+      <div className="flex items-center gap-2.5">
+        {onEdit && !blocked && (
+          <button type="button" onClick={onEdit} className="btn">
+            {t("purchases.amend.action")}
+          </button>
+        )}
+        {canPay && (
+          <button type="button" onClick={onRecordPayment} className="btn btn-filled">
+            {t("purchases.recordPayment")}
+          </button>
+        )}
+      </div>
     ) : undefined;
   return (
     <Drawer
@@ -108,6 +123,18 @@ export default function BillDrawer({
         <span className="muted">{t("purchases.outstanding")}</span>
         <span className="font-semibold">{xaf(bill.outstanding_amount)}</span>
       </div>
+
+      {bill.amended_from && (
+        <div className="mt-4 text-[13px] muted">
+          {t("purchases.amend.replaces").replace("{id}", bill.amended_from)}
+        </div>
+      )}
+
+      {onEdit && blocked && (
+        <div className="mt-4 text-[13px] muted">
+          {t(blocked === "opening" ? "purchases.amend.blockedOpening" : "purchases.amend.blockedSettled")}
+        </div>
+      )}
 
       {bill.remarks && (
         <div className="mt-5">
