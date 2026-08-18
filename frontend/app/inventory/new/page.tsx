@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -102,6 +102,21 @@ function StockEntryForm() {
   // transactions"), which reached the user as an unexplained 502. Do not offer
   // what cannot be chosen.
   const warehouses = (warehousesQ.data ?? []).filter((w) => !w.is_group);
+
+  // Preselect where stock actually goes. This is a distribution business —
+  // devices arrive finished and leave finished — so Finished Goods is the
+  // answer almost every time, and making someone choose it on every movement
+  // is a keystroke that only ever has one right value.
+  //
+  // Only fills an EMPTY field, so a deliberate choice is never overwritten,
+  // and falls back to the sole warehouse when there is only one.
+  useEffect(() => {
+    if (warehouse || warehouses.length === 0) return;
+    const preferred =
+      warehouses.find((w) => /finished goods/i.test(w.id)) ??
+      (warehouses.length === 1 ? warehouses[0] : undefined);
+    if (preferred) setWarehouse(preferred.id);
+  }, [warehouses, warehouse]);
 
   return (
     <DocFormShell
