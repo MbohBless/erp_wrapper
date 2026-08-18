@@ -109,6 +109,78 @@ docker compose up -d --build                 # single-tenant
 docker compose --profile saas up -d --build  # SaaS plane (see docs/deployment.md)
 ```
 
+## ERPNext will reject what the tests accept
+
+The in-memory fake in `backend/tests/fakes.py` stores whatever it is given. It
+does not enforce mandatory fields, link validation, child tables, tree rules or
+fiscal-year bounds. **Every defect below shipped with a green suite and was found
+only by driving a real instance.** Assume this class of bug is present until
+exercised against live ERPNext.
+
+Write tests that assert on the **payload sent to ERPNext**, not on the response.
+A response can look correct while the document is silently wrong.
+
+Traps, each of which has already cost a production bug:
+
+- **Tree roots are never selectable.** `All Customer Groups`, `All Item Groups`,
+  `All Warehouses` are containers. ERPNext refuses them on a transaction
+  ("Cannot select a Group type…", "Group node warehouse is not allowed"). Never
+  default a field to one — that broke customer creation, and filed 12 items
+  under a category nothing can group by. Filter pickers to `is_group = 0`, and
+  exclude `disabled = 1` too.
+- **Mandatory child tables.** A Maintenance Visit needs a `purposes` row with
+  `service_person` and `work_done`. Missing child rows fail only against real
+  ERPNext.
+- **`posting_date` is ignored without `set_posting_time = 1`.** Backdating
+  silently posts to today, so an invoice lands in the wrong period.
+- **Postings must fall inside an active Fiscal Year.** A fresh site has only the
+  current year, which is why opening balances — invoices raised *before* the
+  cutover — must post on the start date, not their original date.
+- **`set_only_once` fields cannot be changed, ever.** The company abbreviation is
+  suffixed onto every account name; the only way to change it is to rebuild the
+  site. Decide it before the wizard runs.
+- **List queries do not return child tables.** `GET /sales` cannot include line
+  items; a detail view must fetch the document by id. Totals still look right,
+  which makes this read as a display glitch rather than missing data.
+- **The setup wizard leaves the company unusable.** Default accounts are unset or
+  matched by number prefix (the receivable control came out as an accrued-interest
+  account). Run `scripts/configure_company_accounts.py` on every new site — see
+  [docs/fresh-install.md](docs/fresh-install.md).
+
+## Operating a live deployment
+
+Once a client is entering data, treat the instance as production:
+
+- **Back up before any ERPNext data change** (`scripts/backup-remote.sh --force`).
+  Restores are proven; `scripts/restore.sh --latest --dry-run` verifies weekly.
+- **Disable warehouses and master data, never delete.** ERPNext keeps stock
+  ledger entries against a warehouse forever. Repoint every default *before*
+  disabling — a default pointing at a disabled record fails validation later,
+  far from the change that caused it.
+- **Verify a deploy by comparing commit hashes**, not by asking whether the site
+  responds. A failed `git pull` leaves the previous build serving happily.
+- **Never copy files to the server.** Commit, push, then pull. Untracked files in
+  the working tree abort `git pull`, and the deploy silently does not happen.
+- Warn before deploying; a rebuild is ~30s of 502 for whoever is mid-form.
+
+## Gotchas that cost real time
+
+- **`bench console` mangles multi-line scripts.** It feeds stdin to IPython,
+  which splits cells and dedents function bodies. Pipe one line instead:
+  `echo 'exec(open("/tmp/x.py").read(), globals())' | bench --site … console`.
+  The `globals()` matters — without it, names bound at module level are invisible
+  to functions defined in the same file.
+- **`docker compose exec -T` consumes stdin.** An informational query will eat a
+  confirmation prompt's input. Add `</dev/null` to every exec that is not meant
+  to read.
+- **A sync FastAPI dependency runs in a threadpool**, so a ContextVar it sets is
+  invisible to middleware. Pass request-scoped values through the ASGI `scope`
+  (see how `get_current_user` publishes `audit_actor`).
+- **`PUT /settings/branding` replaces the whole document.** Omitted fields are
+  written as empty. Read, modify, send back whole.
+- **`.env` is not a shell script.** Sourcing it executes it. Read specific keys
+  with the `env_get` helper the scripts share.
+
 ## Expectations
 
 - Add/adjust tests for backend changes; run `pytest` in **both** `backend/` and
@@ -118,3 +190,8 @@ docker compose --profile saas up -d --build  # SaaS plane (see docs/deployment.m
 - Don't add business logic to routers; don't fabricate ERPNext data.
 - Don't hardcode "EquiMed" in user-facing frontend copy — it is white-labelled.
 - Keep `/docs` accurate — it is the source of truth for this project.
+- A green suite is necessary, not sufficient. Before calling ERPNext-facing work
+  done, exercise it against a real instance with realistic data — prior-year
+  dates, accented names, a tree-root default, a quantity larger than stock.
+- Prove a test can fail. Mutate the fix, watch the test go red, restore. Several
+  "fixes" here were inert until that check caught them.
