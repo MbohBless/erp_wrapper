@@ -1,5 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+
+import { useAuth } from "@/lib/auth";
+import { getPurchase } from "@/lib/purchases";
+
 import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
@@ -16,6 +21,16 @@ export default function BillDrawer({
   onRecordPayment?: () => void;
 }) {
   const { t } = useI18n();
+  // Same as the sales drawer: the bill came from the list, whose items are
+  // never populated because ERPNext list queries omit child tables.
+  const { token } = useAuth();
+  const { data: full } = useQuery({
+    queryKey: ["purchase", bill.id],
+    queryFn: () => getPurchase(token as string, bill.id),
+    enabled: !!token && !!bill.id,
+    staleTime: 30_000,
+  });
+  const lines = full?.items ?? bill.items;
   const footer =
     onRecordPayment && bill.outstanding_amount > 0 ? (
       <button type="button" onClick={onRecordPayment} className="btn btn-filled">
@@ -66,14 +81,14 @@ export default function BillDrawer({
             </tr>
           </thead>
           <tbody>
-            {bill.items.length === 0 ? (
+            {lines.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-3 py-4 text-center muted-2">
                   {t("purchases.noLineItems")}
                 </td>
               </tr>
             ) : (
-              bill.items.map((it, i) => (
+              lines.map((it, i) => (
                 <tr key={i} className="border-b border-solid divide-soft">
                   <td className="px-3 py-2">{it.item_code}</td>
                   <td className="px-3 py-2 text-right muted">{it.qty}</td>

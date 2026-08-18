@@ -1,5 +1,6 @@
 export const products = {
   en: {
+    "products.error.categoryRequired": "Choose a category.",
     "products.trackBatches": "Track batches and expiry dates",
     "products.trackBatchesHint": "Required before batch numbers can be recorded for this product. Cannot be changed once stock has moved.",
     "products.title": "Products",
@@ -33,6 +34,7 @@ export const products = {
     "products.editProduct": "Edit product",
   },
   fr: {
+    "products.error.categoryRequired": "Choisissez une catégorie.",
     "products.trackBatches": "Suivre les lots et dates de péremption",
     "products.trackBatchesHint": "Obligatoire pour enregistrer des numéros de lot. Non modifiable après tout mouvement de stock.",
     "products.title": "Produits",

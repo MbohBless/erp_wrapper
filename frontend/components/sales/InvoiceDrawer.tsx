@@ -1,5 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+
+import { useAuth } from "@/lib/auth";
+import { getSale } from "@/lib/sales";
+
 import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
@@ -16,6 +21,18 @@ export default function InvoiceDrawer({
   onRecordPayment?: () => void;
 }) {
   const { t } = useI18n();
+  // The invoice handed in came from the LIST, and an ERPNext list query cannot
+  // return child tables — so its `items` is always empty. Totals looked right
+  // because they are stored on the invoice itself; only the lines were missing.
+  // Fetch the full document to show them.
+  const { token } = useAuth();
+  const { data: full } = useQuery({
+    queryKey: ["sale", invoice.id],
+    queryFn: () => getSale(token as string, invoice.id),
+    enabled: !!token && !!invoice.id,
+    staleTime: 30_000,
+  });
+  const lines = full?.items ?? invoice.items;
   const footer =
     onRecordPayment && invoice.outstanding_amount > 0 ? (
       <button type="button" onClick={onRecordPayment} className="btn btn-filled">
@@ -49,7 +66,7 @@ export default function InvoiceDrawer({
         </div>
       </div>
 
-      <LineItems items={invoice.items} />
+      <LineItems items={lines} />
 
       <div className="flex justify-between py-1.5 text-sm">
         <span className="muted">{t("sales.grandTotal")}</span>

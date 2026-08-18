@@ -8,6 +8,7 @@ import DocFormShell, { DOC_FIELD, DOC_GRID, DOC_LABEL } from "@/components/ui/Do
 import { groupNum } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useReferenceOptions } from "@/lib/reference";
 import {
   type Product,
   type ProductInput,
@@ -38,6 +39,7 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
   const editing = !!initial;
   const { token } = useAuth();
   const { t } = useI18n();
+  const { options } = useReferenceOptions();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -46,7 +48,9 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
   const [form, setForm] = useState<FormState>({
     name: initial?.name ?? "",
     sku: initial?.sku ?? "",
-    category: initial?.category ?? "All Item Groups",
+    // Empty, not the tree root: "All Item Groups" is the container, not a
+    // category, and 12 items were filed under it because the form offered it.
+    category: initial?.category ?? "",
     unit: initial?.unit ?? "Nos",
     manufacturer: initial?.manufacturer ?? "",
     barcode: initial?.barcode ?? "",
@@ -71,6 +75,13 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
 
   function onSave() {
     setError(null);
+    // Required from now on. Every new item gets a category so the catalogue
+    // stays filterable — the 12 items already on the tree root are what
+    // happens when it is optional.
+    if (!form.category) {
+      setError(t("products.error.categoryRequired"));
+      return;
+    }
     save.mutate({
       name: form.name,
       sku: form.sku,
@@ -128,8 +139,22 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             />
           </div>
           <div>
-            <label className={DOC_LABEL}>{t("products.category")}</label>
-            <input className={DOC_FIELD} value={form.category} onChange={(e) => set("category", e.target.value)} />
+            <label className={DOC_LABEL}>{t("products.category")} *</label>
+            {/* A select, not free text. Typed categories drift — "Consumable",
+                "consumables", "Consumable " — and then nothing can group by
+                them. The options come from ERPNext, so adding a category is a
+                change there, not a deploy. */}
+            <select
+              className={DOC_FIELD}
+              value={form.category}
+              onChange={(e) => set("category", e.target.value)}
+              required
+            >
+              <option value="">{t("common.choose")}</option>
+              {(options?.item_groups ?? []).map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={DOC_LABEL}>{t("products.sellingPriceXaf")}</label>
