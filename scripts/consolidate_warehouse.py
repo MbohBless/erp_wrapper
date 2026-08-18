@@ -34,10 +34,19 @@ def main():
     if not keep:
         print("no '%s' warehouse found; refusing to guess which to keep" % KEEP_MATCH)
         return
-    others = [w["name"] for w in leaves if w["name"] != keep and not w["disabled"]]
+    # Everything that is not the keeper, INCLUDING warehouses already disabled.
+    # A default still pointing at a disabled warehouse is the dangerous case:
+    # nothing complains until a document is created from that default and fails
+    # validation. An earlier version only looked at warehouses it disabled
+    # itself, and so walked straight past 13 item defaults left behind when the
+    # warehouse was disabled by hand in the desk.
+    others = [w["name"] for w in leaves if w["name"] != keep]
+    already_off = [w["name"] for w in leaves if w["name"] != keep and w["disabled"]]
 
     print("keeping : %s" % keep)
     print("retiring: %s" % (", ".join(others) or "none"))
+    if already_off:
+        print("  (already disabled, but still referenced: %s)" % ", ".join(already_off))
     print()
 
     # Refuse to retire a warehouse that actually holds something. A cancelled
@@ -75,6 +84,8 @@ def main():
 
     # 3. Now retire them.
     for w in others:
+        if frappe.db.get_value("Warehouse", w, "disabled"):
+            continue
         frappe.db.set_value("Warehouse", w, "disabled", 1)
         print("  disabled %s (kept, not deleted — ledger history survives)" % w)
 
