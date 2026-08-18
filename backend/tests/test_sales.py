@@ -233,6 +233,33 @@ def test_amend_carries_the_tax_template_and_stock_flag(
     assert posted["taxes_and_charges"] == "VAT 19.25% - QBS"
 
 
+def test_line_items_carry_the_item_name(client, admin_token, fake_erpnext):
+    """The drawer showed a bare SKU, which nobody in the warehouse reads as a
+    product. ERPNext stamps `item_name` onto each line when the invoice is
+    saved, so it is the name the document was *billed* as."""
+    created = _create(client, admin_token).json()
+    for row in fake_erpnext.store[created["id"]]["items"]:
+        row["item_name"] = "Digital Thermometer" if "THERMO" in row["item_code"] \
+            else "Examination Gloves (M)"
+
+    body = client.get(f"/sales/{created['id']}", headers=auth_header(admin_token)).json()
+    assert [(i["item_code"], i["item_name"]) for i in body["items"]] == [
+        ("THERMO-001", "Digital Thermometer"),
+        ("GLOVE-001", "Examination Gloves (M)"),
+    ]
+
+
+def test_amend_does_not_send_a_stale_item_name(client, admin_token, fake_erpnext):
+    """ERPNext fills `item_name` from the Item master on save. Echoing back the
+    name the original was billed under would pin it, so a product renamed since
+    would keep its old name on every correction."""
+    original = _create(client, admin_token).json()["id"]
+    new_id = _amend(client, admin_token, original).json()["id"]
+
+    for row in fake_erpnext.store[new_id]["items"]:
+        assert "item_name" not in row
+
+
 def test_amend_missing_invoice_404(client, admin_token, fake_erpnext):
     assert _amend(client, admin_token, "NOPE").status_code == 404
 

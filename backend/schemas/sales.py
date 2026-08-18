@@ -33,6 +33,10 @@ class SalesInvoiceUpdate(SalesInvoiceCreate):
 
 class InvoiceLine(BaseModel):
     item_code: str
+    # ERPNext copies the item's name onto the line when the invoice is saved, so
+    # this is what the document was actually billed as — not today's catalogue
+    # name. Optional because a list query never returns child rows at all.
+    item_name: str | None = None
     qty: float
     rate: float
     amount: float

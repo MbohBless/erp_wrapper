@@ -2,6 +2,9 @@ import { api, encodeId } from "@/lib/http";
 
 export type InvoiceLine = {
   item_code: string;
+  /** The item's name as billed. Null on list rows — an ERPNext list query
+   *  returns no child table at all — so always fall back to the code. */
+  item_name: string | null;
   qty: number;
   rate: number;
   amount: number;

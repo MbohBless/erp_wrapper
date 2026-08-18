@@ -28,6 +28,7 @@ class PurchaseInvoiceUpdate(PurchaseInvoiceCreate):
 
 class BillLine(BaseModel):
     item_code: str
+    item_name: str | None = None  # as billed; see InvoiceLine in schemas/sales.py
     qty: float
     rate: float
     amount: float

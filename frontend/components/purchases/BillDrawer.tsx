@@ -57,7 +57,7 @@ export default function BillDrawer({
       eyebrow={t("purchases.drawer.eyebrow")}
       title={bill.id}
       onClose={onClose}
-      width="max-w-[460px]"
+      width="max-w-[600px]"
       footer={footer}
     >
       <div className="flex justify-between mb-5">
@@ -105,7 +105,12 @@ export default function BillDrawer({
             ) : (
               lines.map((it, i) => (
                 <tr key={i} className="border-b border-solid divide-soft">
-                  <td className="px-3 py-2">{it.item_code}</td>
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{it.item_name || it.item_code}</div>
+                    {it.item_name && (
+                      <div className="text-xs muted-2 mt-0.5">{it.item_code}</div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right muted">{it.qty}</td>
                   <td className="px-3 py-2 text-right font-medium">{xaf(it.amount)}</td>
                 </tr>

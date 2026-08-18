@@ -46,6 +46,7 @@ def _from_erpnext(doc: dict) -> SalesInvoiceRead:
     items = [
         InvoiceLine(
             item_code=it.get("item_code"),
+            item_name=it.get("item_name") or None,
             qty=_num(it.get("qty")),
             rate=_num(it.get("rate")),
             amount=_num(it.get("amount") or _num(it.get("qty")) * _num(it.get("rate"))),

@@ -249,7 +249,10 @@ Create body: `{ customer, items: [{ item_code, qty, rate }], due_date?,
 posting_date?, remarks?, update_stock?, taxes_and_charges? }`.
 
 `SalesInvoice` also returns `update_stock`, `taxes_and_charges`, `amended_from`,
-`is_cancelled` and `is_opening`.
+`is_cancelled` and `is_opening`. Line items carry `item_name` — the name the
+document was billed under, stamped on by ERPNext at save — but **only on
+`GET /sales/{id}`**: a list query returns no child table at all, so a list row
+has no lines to name. Fall back to `item_code`.
 
 ### Editing a posted invoice
 

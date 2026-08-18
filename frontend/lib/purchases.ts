@@ -2,6 +2,8 @@ import { api, encodeId } from "@/lib/http";
 
 export type BillLine = {
   item_code: string;
+  /** As billed; null on list rows. See InvoiceLine in lib/sales.ts. */
+  item_name: string | null;
   qty: number;
   rate: number;
   amount: number;
