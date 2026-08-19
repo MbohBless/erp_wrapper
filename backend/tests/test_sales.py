@@ -276,3 +276,159 @@ def test_only_manager_and_administrator_may_amend(
     assert fake_erpnext.store[original]["docstatus"] == 1
 
     assert _amend(client, make_token("Manager"), original).status_code == 200
+
+
+# --- Commissioned sales --------------------------------------------------
+#
+# A sale brokered by an agent and billed below the product's own selling price.
+# The customer pays the lower figure; nobody is owed a payout. What has to
+# survive is the *reason*: without it, a deliberate concession and a mistyped
+# rate are the same row.
+
+PRODUCT = {
+    "name": "Gazelle HB Variant Cartridges",
+    "sku": "GHBC-0002",
+    "selling_price": 87500,
+    "unit": "Nos",
+}
+
+
+def _catalogue(client, token, **overrides):
+    return client.post(
+        "/products", json={**PRODUCT, **overrides}, headers=auth_header(token)
+    )
+
+
+def test_commissioned_sale_records_the_flag_and_the_agent(
+    client, admin_token, fake_erpnext
+):
+    _catalogue(client, admin_token)
+    resp = _create(
+        client, admin_token,
+        items=[{"item_code": "GHBC-0002", "qty": 2, "rate": 70000}],
+        is_commissioned=True, commission_agent="Jean-Paul Nkeng",
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["is_commissioned"] is True
+    assert body["commission_agent"] == "Jean-Paul Nkeng"
+
+    stored = fake_erpnext.store[body["id"]]
+    assert stored["custom_is_commissioned"] == 1
+    assert stored["custom_commission_agent"] == "Jean-Paul Nkeng"
+
+
+def test_the_line_carries_the_list_price_it_was_discounted_from(
+    client, admin_token, fake_erpnext
+):
+    """`price_list_rate` is what makes the concession measurable. ERPNext fills
+    it from the Standard Selling price list when it is absent — and items with
+    no entry there record a list price of zero, which reads as no discount at
+    all."""
+    _catalogue(client, admin_token)
+    body = _create(
+        client, admin_token,
+        items=[{"item_code": "GHBC-0002", "qty": 2, "rate": 70000}],
+        is_commissioned=True, commission_agent="Jean-Paul Nkeng",
+    ).json()
+
+    row = fake_erpnext.store[body["id"]]["items"][0]
+    assert row["price_list_rate"] == 87500  # the product's own selling price
+    assert row["rate"] == 70000             # what was actually charged
+
+    assert body["items"][0]["list_rate"] == 87500
+    assert body["items"][0]["rate"] == 70000
+
+
+def test_the_list_price_is_read_from_the_catalogue_not_the_request(
+    client, admin_token, fake_erpnext
+):
+    """Otherwise the discount is self-declared: send a list price of 10,000,000
+    and any sale looks like a heroic concession."""
+    _catalogue(client, admin_token)
+    body = _create(
+        client, admin_token,
+        items=[{"item_code": "GHBC-0002", "qty": 1, "rate": 70000,
+                "list_rate": 10_000_000, "price_list_rate": 10_000_000}],
+        is_commissioned=True, commission_agent="Jean-Paul Nkeng",
+    ).json()
+    assert fake_erpnext.store[body["id"]]["items"][0]["price_list_rate"] == 87500
+
+
+def test_an_item_with_no_price_on_file_records_no_list_price(
+    client, admin_token, fake_erpnext
+):
+    """A false zero would report the whole sale as given away."""
+    _catalogue(client, admin_token, sku="NOPRICE-1", selling_price=None)
+    body = _create(
+        client, admin_token,
+        items=[{"item_code": "NOPRICE-1", "qty": 1, "rate": 5000}],
+    ).json()
+
+    assert "price_list_rate" not in fake_erpnext.store[body["id"]]["items"][0]
+    assert body["items"][0]["list_rate"] is None
+
+
+def test_a_free_line_is_not_repriced_to_the_list_rate(
+    client, admin_token, fake_erpnext
+):
+    """ERPNext recomputes `rate` from `price_list_rate` when the rate is falsy,
+    so sending a list price against a giveaway line would bill for it."""
+    _catalogue(client, admin_token)
+    body = _create(
+        client, admin_token,
+        items=[{"item_code": "GHBC-0002", "qty": 1, "rate": 0}],
+    ).json()
+    assert "price_list_rate" not in fake_erpnext.store[body["id"]]["items"][0]
+
+
+def test_a_commissioned_sale_must_name_its_agent(client, admin_token, fake_erpnext):
+    _catalogue(client, admin_token)
+    resp = _create(client, admin_token, is_commissioned=True)
+    assert resp.status_code == 422
+    assert "name of the agent" in resp.json()["detail"]
+
+    resp = _create(client, admin_token, is_commissioned=True, commission_agent="   ")
+    assert resp.status_code == 422
+
+
+def test_an_agent_without_the_flag_is_refused(client, admin_token, fake_erpnext):
+    """Otherwise the name sits on an invoice that no commission report finds."""
+    resp = _create(client, admin_token, commission_agent="Jean-Paul Nkeng")
+    assert resp.status_code == 422
+    assert "not marked as a commissioned sale" in resp.json()["detail"]
+
+
+def test_an_ordinary_sale_is_unaffected(client, admin_token, fake_erpnext):
+    _catalogue(client, admin_token)
+    body = _create(
+        client, admin_token, items=[{"item_code": "GHBC-0002", "qty": 1, "rate": 87500}]
+    ).json()
+    assert body["is_commissioned"] is False
+    assert body["commission_agent"] is None
+    assert fake_erpnext.store[body["id"]].get("custom_is_commissioned") is None
+
+
+def test_amending_keeps_the_sale_commissioned(client, admin_token, fake_erpnext):
+    """A PUT replaces the whole document, so a correction that forgets these
+    turns a tracked concession into an unexplained low price."""
+    _catalogue(client, admin_token)
+    original = _create(
+        client, admin_token,
+        items=[{"item_code": "GHBC-0002", "qty": 2, "rate": 70000}],
+        is_commissioned=True, commission_agent="Jean-Paul Nkeng",
+    ).json()["id"]
+
+    amended = client.put(
+        f"/sales/{original}",
+        json={"customer": INVOICE["customer"],
+              "items": [{"item_code": "GHBC-0002", "qty": 3, "rate": 70000}],
+              "is_commissioned": True, "commission_agent": "Jean-Paul Nkeng"},
+        headers=auth_header(admin_token),
+    ).json()
+
+    assert amended["is_commissioned"] is True
+    assert amended["commission_agent"] == "Jean-Paul Nkeng"
+    posted = fake_erpnext.store[amended["id"]]
+    assert posted["custom_is_commissioned"] == 1
+    assert posted["items"][0]["price_list_rate"] == 87500

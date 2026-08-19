@@ -246,13 +246,35 @@ Movement body: `{ warehouse, items: [{ item_code, qty, batch_no?, rate? }] }`.
 | PUT | `/sales/{id}` | **cancel + amend** — see below. Returns the *replacement*, under a new id |
 
 Create body: `{ customer, items: [{ item_code, qty, rate }], due_date?,
-posting_date?, remarks?, update_stock?, taxes_and_charges? }`.
+posting_date?, remarks?, update_stock?, taxes_and_charges?, is_commissioned?,
+commission_agent? }`.
 
-`SalesInvoice` also returns `update_stock`, `taxes_and_charges`, `amended_from`,
-`is_cancelled` and `is_opening`. Line items carry `item_name` — the name the
+`SalesInvoice` also returns `update_stock`, `taxes_and_charges`,
+`is_commissioned`, `commission_agent`, `amended_from`, `is_cancelled` and
+`is_opening`. Line items carry `item_name` — the name the
 document was billed under, stamped on by ERPNext at save — but **only on
 `GET /sales/{id}`**: a list query returns no child table at all, so a list row
 has no lines to name. Fall back to `item_code`.
+
+### Commissioned sales
+
+A sale brokered by an agent and billed **below** the product's own selling price.
+The customer is invoiced the lower figure and no payout is owed — the agent keeps
+the spread — so this is a discount with a reason recorded against it, *not*
+ERPNext's native `sales_partner` commission, which posts an expense and a
+liability.
+
+- `is_commissioned` requires `commission_agent`, and an agent without the flag is
+  refused too (422 either way). A flag with no name answers nothing later; a name
+  the flag does not accompany is a name no report finds.
+- Every line is stamped with ERPNext's `price_list_rate`, read **server-side**
+  from the item's `custom_selling_price` — never from the request, or the
+  discount would be self-declared. It is returned as `list_rate` on each line,
+  and is `null` for a product with no price on file. Left unsent, ERPNext fills
+  it from the Standard Selling price list, where several items have no entry, so
+  the line records a list price of zero and the concession disappears.
+- A line charged at 0 is sent **without** a list price: ERPNext recomputes `rate`
+  from `price_list_rate` when the rate is falsy, which would bill for a giveaway.
 
 ### Editing a posted invoice
 
@@ -430,7 +452,13 @@ exist on the target DocTypes — e.g. `custom_contact_person`, `custom_phone`,
 `custom_email`, `custom_address` (Customer/Supplier); `custom_barcode`,
 `custom_manufacturer`, `custom_purchase_price`, `custom_selling_price` (Item);
 `custom_installation_date`, `custom_status` (Serial No); `custom_engineer`,
-`custom_parts_used`, `custom_customer_signed`, `custom_status` (Maintenance Visit).
+`custom_parts_used`, `custom_customer_signed`, `custom_status` (Maintenance Visit);
+`custom_is_commissioned`, `custom_commission_agent` (Sales Invoice).
+
+Install them with `scripts/install_custom_fields.py` **before** deploying code
+that writes one. ERPNext does not reject an unknown field — it drops it — so a
+commissioned sale would save looking perfectly normal, with the flag and the
+agent silently gone.
 
 ---
 

@@ -9,7 +9,7 @@ import Drawer from "@/components/ui/Drawer";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import { xaf } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { amendBlockedReason, type SalesInvoice } from "@/lib/sales";
+import { amendBlockedReason, concession, type SalesInvoice } from "@/lib/sales";
 
 export default function InvoiceDrawer({
   invoice,
@@ -38,7 +38,9 @@ export default function InvoiceDrawer({
     staleTime: 30_000,
   });
   const lines = full?.items ?? invoice.items;
-  const blocked = amendBlockedReason(full ?? invoice);
+  const shown = full ?? invoice;
+  const blocked = amendBlockedReason(shown);
+  const givenAway = concession(shown);
   const canPay = onRecordPayment && invoice.outstanding_amount > 0;
   const footer =
     onEdit || canPay ? (
@@ -81,6 +83,22 @@ export default function InvoiceDrawer({
           <div>{invoice.due_date ?? "—"}</div>
         </div>
       </div>
+
+      {shown.is_commissioned && (
+        <div className="blueprint p-3 mb-5 text-[13px]">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] tracking-[0.12em] uppercase text-accent">
+              {t("sales.commissioned")}
+            </span>
+          </div>
+          <div>{shown.commission_agent || "—"}</div>
+          {givenAway > 0 && (
+            <div className="muted mt-1">
+              {t("sales.givenAway")}: <span className="text-warn">{xaf(givenAway)}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <LineItems items={lines} />
 
@@ -152,7 +170,14 @@ function LineItems({ items }: { items: SalesInvoice["items"] }) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right muted">{it.qty}</td>
-                  <td className="px-3 py-2 text-right font-medium">{xaf(it.amount)}</td>
+                  <td className="px-3 py-2 text-right font-medium">
+                    {xaf(it.amount)}
+                    {it.list_rate != null && it.list_rate > it.rate && (
+                      <div className="text-[11px] muted-2 line-through">
+                        {xaf(it.list_rate * it.qty)}
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))
             )}

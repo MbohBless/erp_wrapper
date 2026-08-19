@@ -18,6 +18,13 @@ class SalesInvoiceCreate(BaseModel):
     remarks: str | None = None
     update_stock: bool = False
     taxes_and_charges: str | None = None
+    # A sale brokered by an agent and billed below the product's selling price.
+    # The customer pays the lower figure and no payout is owed — the agent keeps
+    # the spread — so this is a discount with a reason recorded against it, not
+    # ERPNext's `sales_partner` commission. Without the reason, a deliberate
+    # concession and a mistyped rate look identical a month later.
+    is_commissioned: bool = False
+    commission_agent: str | None = Field(default=None, max_length=140)
 
 
 class SalesInvoiceUpdate(SalesInvoiceCreate):
@@ -33,6 +40,11 @@ class SalesInvoiceUpdate(SalesInvoiceCreate):
 
 class InvoiceLine(BaseModel):
     item_code: str
+    # What the product's own selling price was when the invoice was raised
+    # (ERPNext `price_list_rate`), against which `rate` is the amount actually
+    # charged. The pair is what makes "how much did we give away" answerable;
+    # None when the product had no price on file.
+    list_rate: float | None = None
     # ERPNext copies the item's name onto the line when the invoice is saved, so
     # this is what the document was actually billed as — not today's catalogue
     # name. Optional because a list query never returns child rows at all.
@@ -58,6 +70,8 @@ class SalesInvoiceRead(BaseModel):
     # template off an invoice, or leaving stock issued against a cancelled one.
     update_stock: bool = False
     taxes_and_charges: str | None = None
+    is_commissioned: bool = False
+    commission_agent: str | None = None
     # Amendment lineage. `amended_from` names the cancelled invoice this one
     # replaces; `is_cancelled` marks an invoice that has been reversed and no
     # longer affects the ledger. Both are needed to decide whether an invoice

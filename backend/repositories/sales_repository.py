@@ -29,6 +29,8 @@ _LIST_FIELDS = [
     "is_opening",
     "update_stock",
     "taxes_and_charges",
+    "custom_is_commissioned",
+    "custom_commission_agent",
 ]
 
 # docstatus 2 = cancelled. A cancelled invoice has had its ledger entries
@@ -47,6 +49,7 @@ def _from_erpnext(doc: dict) -> SalesInvoiceRead:
         InvoiceLine(
             item_code=it.get("item_code"),
             item_name=it.get("item_name") or None,
+            list_rate=_num(it.get("price_list_rate")) or None,
             qty=_num(it.get("qty")),
             rate=_num(it.get("rate")),
             amount=_num(it.get("amount") or _num(it.get("qty")) * _num(it.get("rate"))),
@@ -65,6 +68,8 @@ def _from_erpnext(doc: dict) -> SalesInvoiceRead:
         items=items,
         update_stock=bool(_num(doc.get("update_stock"))),
         taxes_and_charges=doc.get("taxes_and_charges") or None,
+        is_commissioned=bool(_num(doc.get("custom_is_commissioned"))),
+        commission_agent=doc.get("custom_commission_agent") or None,
         amended_from=doc.get("amended_from") or None,
         is_cancelled=int(_num(doc.get("docstatus"))) == 2,
         # `is_opening` is a Select on Sales Invoice ("No"/"Yes"), not a check —
@@ -74,14 +79,27 @@ def _from_erpnext(doc: dict) -> SalesInvoiceRead:
     )
 
 
-def _line_rows(items) -> list[dict]:
+def _line_rows(items, list_rates: dict[str, float] | None = None) -> list[dict]:
     """Item rows as ERPNext wants them. Shared by create and amend so a
-    correction cannot drift from the shape the original was posted with."""
+    correction cannot drift from the shape the original was posted with.
+
+    `list_rates` is the product's own selling price per item code, written to
+    ERPNext's `price_list_rate`. Sending it is what lets anyone later ask what a
+    sale was discounted by: left out, ERPNext fills it from the Standard Selling
+    price list, and six of this client's items have no entry there — so the line
+    records a list price of zero and the concession vanishes.
+    """
     rows = []
     for line in items:
         row: dict = {"item_code": line.item_code, "qty": line.qty, "rate": line.rate}
         if getattr(line, "description", None):
             row["description"] = line.description
+        list_rate = (list_rates or {}).get(line.item_code)
+        # Only alongside a real charge. ERPNext recomputes `rate` from
+        # `price_list_rate` when the rate is falsy, which would silently turn a
+        # deliberately free line into a full-price one.
+        if list_rate and line.rate > 0:
+            row["price_list_rate"] = list_rate
         rows.append(row)
     return rows
 
@@ -121,11 +139,18 @@ class SalesRepository:
             return None
         return _from_erpnext(doc)
 
-    async def create(self, data: SalesInvoiceCreate) -> SalesInvoiceRead:
-        doc = await self._post(data)
+    async def create(
+        self, data: SalesInvoiceCreate, list_rates: dict[str, float] | None = None
+    ) -> SalesInvoiceRead:
+        doc = await self._post(data, list_rates=list_rates)
         return _from_erpnext(doc)
 
-    async def amend(self, name: str, data: SalesInvoiceUpdate) -> SalesInvoiceRead:
+    async def amend(
+        self,
+        name: str,
+        data: SalesInvoiceUpdate,
+        list_rates: dict[str, float] | None = None,
+    ) -> SalesInvoiceRead:
         """Replace a posted invoice: cancel it, then post the corrected copy.
 
         ERPNext cannot edit a submitted document, so this is the only way to
@@ -163,14 +188,23 @@ class SalesRepository:
         else:
             # A draft — never one of ours, but one left in the ERPNext desk is
             # still editable in place, and cancelling it is not possible.
-            await self.client.update_document(self.DOCTYPE, name, self._payload(data))
+            await self.client.update_document(
+                self.DOCTYPE, name, self._payload(data, list_rates)
+            )
             return _from_erpnext(await self.client.submit_document(self.DOCTYPE, name))
 
-        return _from_erpnext(await self._post(data, amended_from=name))
+        return _from_erpnext(
+            await self._post(data, amended_from=name, list_rates=list_rates)
+        )
 
-    def _payload(self, data: SalesInvoiceCreate) -> dict:
+    def _payload(
+        self, data: SalesInvoiceCreate, list_rates: dict[str, float] | None = None
+    ) -> dict:
         """The document body, for the in-place update of a draft."""
-        payload: dict = {"customer": data.customer, "items": _line_rows(data.items)}
+        payload: dict = {
+            "customer": data.customer,
+            "items": _line_rows(data.items, list_rates),
+        }
         if data.due_date:
             payload["due_date"] = data.due_date
         if data.posting_date:
@@ -180,20 +214,27 @@ class SalesRepository:
         payload["update_stock"] = 1 if data.update_stock else 0
         if data.taxes_and_charges:
             payload["taxes_and_charges"] = data.taxes_and_charges
+        payload["custom_is_commissioned"] = 1 if data.is_commissioned else 0
+        payload["custom_commission_agent"] = data.commission_agent or ""
         return payload
 
     async def _post(
-        self, data: SalesInvoiceCreate, amended_from: str | None = None
+        self,
+        data: SalesInvoiceCreate,
+        amended_from: str | None = None,
+        list_rates: dict[str, float] | None = None,
     ) -> dict:
         return await create_invoice(
             self.client,
             customer=data.customer,
-            items=_line_rows(data.items),
+            items=_line_rows(data.items, list_rates),
             due_date=data.due_date,
             posting_date=data.posting_date,
             remarks=data.remarks,
             update_stock=data.update_stock,
             taxes_and_charges=data.taxes_and_charges,
+            is_commissioned=data.is_commissioned,
+            commission_agent=data.commission_agent,
             amended_from=amended_from,
             submit=True,
         )

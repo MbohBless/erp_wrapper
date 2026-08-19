@@ -247,6 +247,8 @@ async def create_invoice(
     remarks: str | None = None,
     update_stock: bool = False,
     taxes_and_charges: str | None = None,
+    is_commissioned: bool = False,
+    commission_agent: str | None = None,
     amended_from: str | None = None,
     submit: bool = True,
 ) -> dict:
@@ -271,6 +273,13 @@ async def create_invoice(
         payload["update_stock"] = 1
     if taxes_and_charges:
         payload["taxes_and_charges"] = taxes_and_charges
+    if is_commissioned:
+        # Custom Fields; see scripts/install_custom_fields.py. ERPNext's native
+        # `sales_partner`/`commission_rate` deliberately not used — those post a
+        # commission *expense and liability*, and here nothing is owed.
+        payload["custom_is_commissioned"] = 1
+        if commission_agent:
+            payload["custom_commission_agent"] = commission_agent
     if amended_from:
         # An amendment is a *new* document standing in for a cancelled one.
         # ERPNext names it "<original>-1" and rejects the link unless the

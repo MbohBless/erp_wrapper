@@ -59,6 +59,8 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
   const [updateStock, setUpdateStock] = useState(amending?.update_stock ?? false);
   const [remarks, setRemarks] = useState(amending?.remarks ?? "");
   const [taxTemplate, setTaxTemplate] = useState(amending?.taxes_and_charges ?? "");
+  const [commissioned, setCommissioned] = useState(amending?.is_commissioned ?? false);
+  const [agent, setAgent] = useState(amending?.commission_agent ?? "");
   const [rows, setRows] = useState<Row[]>(() => rowsFrom(amending));
   const [error, setError] = useState<string | null>(null);
   // The replacement's id, once it exists. Shown rather than navigated past:
@@ -79,14 +81,22 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
     setRow(i, { item_code: sku, rate: p?.selling_price != null ? groupNum(String(p.selling_price)) : "" });
   }
 
+  /** A row's list price, straight from the catalogue — the same figure the
+   *  server will stamp on the line, so what is shown here is what gets
+   *  recorded. Undefined for a product with no price on file. */
+  const listRate = (code: string) =>
+    products.find((p) => p.id === code)?.selling_price ?? undefined;
+
   const totals = useMemo(() => {
-    let qty = 0, amount = 0;
+    let qty = 0, amount = 0, given = 0;
     for (const r of rows) {
       const q = parseFloat(r.qty) || 0, rt = parseNum(r.rate) || 0;
       qty += q; amount += q * rt;
+      const list = listRate(r.item_code);
+      if (list != null && rt > 0 && list > rt) given += (list - rt) * q;
     }
-    return { qty, amount };
-  }, [rows]);
+    return { qty, amount, given };
+  }, [rows, products]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -97,6 +107,8 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
         remarks: remarks || null,
         update_stock: updateStock,
         taxes_and_charges: taxTemplate || null,
+        is_commissioned: commissioned,
+        commission_agent: commissioned ? agent.trim() || null : null,
         items: rows
           .filter((r) => r.item_code.trim())
           .map((r) => ({
@@ -121,6 +133,7 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
     setError(null);
     if (!customer) { setError(t("sales.err.customer")); setTab("details"); return; }
     if (!rows.some((r) => r.item_code.trim())) { setError(t("sales.err.items")); setTab("items"); return; }
+    if (commissioned && !agent.trim()) { setError(t("sales.err.agent")); setTab("details"); return; }
     save.mutate();
   }
 
@@ -223,6 +236,26 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
               <label className={LABEL}>{t("sales.paymentDueDate")}</label>
               <input className={FIELD} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+
+            {/* A sale brokered by an agent and billed below the catalogue
+                price. Ticking the box is what separates a deliberate
+                concession from a mistyped rate when someone reads this back. */}
+            <div className="md:col-span-3 pt-2 border-t border-divider">
+              <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={commissioned}
+                  onChange={(e) => setCommissioned(e.target.checked)} />
+                {t("sales.commissioned")}
+              </label>
+              <p className="text-xs muted mt-1.5 max-w-xl">{t("sales.commissionedHint")}</p>
+              {commissioned && (
+                <div className="mt-3 max-w-sm">
+                  <label className={LABEL}>{t("sales.commissionAgent")} *</label>
+                  <input className={FIELD} value={agent}
+                    onChange={(e) => setAgent(e.target.value)}
+                    placeholder={t("sales.commissionAgentPlaceholder")} />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -265,6 +298,16 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
                         </td>
                         <td className="px-2 py-2">
                           <input className={`${CELL} text-right`} inputMode="numeric" value={r.rate} onChange={(e) => setRow(i, { rate: groupNum(e.target.value) })} />
+                          {(() => {
+                            const list = listRate(r.item_code);
+                            const charged = parseNum(r.rate) || 0;
+                            if (list == null || charged <= 0 || list <= charged) return null;
+                            return (
+                              <div className="text-[11px] muted-2 text-right mt-1">
+                                {t("sales.listPrice")} {xaf(list)}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-3 py-2 text-right font-medium num">{xaf(amount)}</td>
                         <td className="px-2 py-2 text-center">
@@ -287,6 +330,14 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
                 <div className="text-[11px] uppercase muted">{t("sales.totalQuantity")}</div>
                 <div className="font-heading font-semibold text-lg num">{totals.qty}</div>
               </div>
+              {totals.given > 0 && (
+                <div className="text-right">
+                  <div className="text-[11px] uppercase muted">{t("sales.givenAway")}</div>
+                  <div className="font-heading font-semibold text-lg num text-warn">
+                    {xaf(totals.given)}
+                  </div>
+                </div>
+              )}
               <div className="text-right">
                 <div className="text-[11px] uppercase muted">{t("sales.totalXaf")}</div>
                 <div className="font-heading font-semibold text-lg num">{xaf(totals.amount)}</div>

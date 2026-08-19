@@ -2,13 +2,19 @@
 
 from fastapi import HTTPException, status
 
+from repositories.product_repository import ProductRepository
 from repositories.sales_repository import SalesRepository
 from schemas.sales import SalesInvoiceCreate, SalesInvoiceRead, SalesInvoiceUpdate
 
 
 class SalesService:
-    def __init__(self, repo: SalesRepository) -> None:
+    def __init__(self, repo: SalesRepository, products: ProductRepository) -> None:
         self.repo = repo
+        # Needed to stamp each line with the product's own selling price. Read
+        # here rather than taken from the request: a list price the caller
+        # supplies is a list price the caller can invent, and the whole value of
+        # recording it is that the discount it implies is not self-declared.
+        self.products = products
 
     async def list(
         self,
@@ -26,7 +32,44 @@ class SalesService:
         return invoice
 
     async def create(self, data: SalesInvoiceCreate) -> SalesInvoiceRead:
-        return await self.repo.create(data)
+        self._check_commission(data)
+        return await self.repo.create(data, await self._list_rates(data.items))
+
+    @staticmethod
+    def _check_commission(data: SalesInvoiceCreate) -> None:
+        """A commissioned sale has to say whose commission it was.
+
+        The flag on its own answers "was this discounted deliberately?" but not
+        "by whom, and is it worth continuing?", which is the question anyone
+        looks at these for.
+        """
+        if data.is_commissioned and not (data.commission_agent or "").strip():
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "A commissioned sale needs the name of the agent it was "
+                "brokered by.",
+            )
+        if not data.is_commissioned and (data.commission_agent or "").strip():
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "There is a commission agent on this invoice but it is not "
+                "marked as a commissioned sale.",
+            )
+
+    async def _list_rates(self, items) -> dict[str, float]:
+        """Each item's own selling price, for ERPNext's `price_list_rate`.
+
+        One lookup per *distinct* item, not per line — an invoice repeating the
+        same product should not pay for it twice. An item with no price on file
+        is simply absent, and its line then records no list price rather than a
+        false zero.
+        """
+        rates: dict[str, float] = {}
+        for code in {line.item_code for line in items}:
+            product = await self.products.get(code)
+            if product is not None and product.selling_price:
+                rates[code] = float(product.selling_price)
+        return rates
 
     async def update(self, invoice_id: str, data: SalesInvoiceUpdate) -> SalesInvoiceRead:
         """Correct a posted invoice.
@@ -37,8 +80,9 @@ class SalesService:
         rather than an update.
         """
         current = await self.get(invoice_id)  # 404s if there is no such invoice
+        self._check_commission(data)
         self._ensure_amendable(current)
-        return await self.repo.amend(invoice_id, data)
+        return await self.repo.amend(invoice_id, data, await self._list_rates(data.items))
 
     @staticmethod
     def _ensure_amendable(invoice: SalesInvoiceRead) -> None:

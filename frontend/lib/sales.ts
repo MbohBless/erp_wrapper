@@ -5,6 +5,10 @@ export type InvoiceLine = {
   /** The item's name as billed. Null on list rows — an ERPNext list query
    *  returns no child table at all — so always fall back to the code. */
   item_name: string | null;
+  /** The product's own selling price when the invoice was raised. `rate` is
+   *  what was actually charged; the gap between them is the concession. Null
+   *  when the product had no price on file. */
+  list_rate: number | null;
   qty: number;
   rate: number;
   amount: number;
@@ -22,6 +26,8 @@ export type SalesInvoice = {
   items: InvoiceLine[];
   update_stock: boolean;
   taxes_and_charges: string | null;
+  is_commissioned: boolean;
+  commission_agent: string | null;
   amended_from: string | null;
   is_cancelled: boolean;
   is_opening: boolean;
@@ -35,6 +41,8 @@ export type SalesInvoiceInput = {
   remarks?: string | null;
   update_stock?: boolean;
   taxes_and_charges?: string | null;
+  is_commissioned?: boolean;
+  commission_agent?: string | null;
 };
 
 export const listSales = (
@@ -69,6 +77,18 @@ export const updateSale = (token: string, id: string, input: SalesInvoiceInput) 
  * refuses independently — it only decides whether offering the action would end
  * in a refusal.
  */
+/** What a commissioned sale gave away: the list price less what was charged,
+ *  across the lines that were discounted. Lines with no list price on file
+ *  contribute nothing rather than counting as a total giveaway. */
+export function concession(invoice: SalesInvoice): number {
+  return invoice.items.reduce(
+    (sum, l) => sum + (l.list_rate && l.list_rate > l.rate
+      ? (l.list_rate - l.rate) * l.qty
+      : 0),
+    0
+  );
+}
+
 export function amendBlockedReason(
   invoice: SalesInvoice
 ): "opening" | "settled" | null {

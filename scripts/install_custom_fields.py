@@ -40,6 +40,19 @@ create_custom_fields({
         {"fieldname": "custom_purchase_price", "label": "Purchase Price", "fieldtype": "Currency", "insert_after": "custom_manufacturer"},
         {"fieldname": "custom_selling_price", "label": "Selling Price", "fieldtype": "Currency", "insert_after": "custom_purchase_price"},
     ],
+    # A sale brokered by an agent, invoiced at a price below the product's own
+    # selling price. The customer is billed the lower figure and nobody is owed
+    # a payout — the agent's income is the spread — so this is a *discount with
+    # a reason attached*, not ERPNext's `sales_partner` commission (which posts
+    # an expense and a liability). Recording the reason is the whole point: the
+    # give-away is otherwise indistinguishable from a typo in the rate.
+    "Sales Invoice": [
+        {"fieldname": "custom_is_commissioned", "label": "Commissioned Sale",
+         "fieldtype": "Check", "insert_after": "remarks"},
+        {"fieldname": "custom_commission_agent", "label": "Commission Agent",
+         **DATA, "insert_after": "custom_is_commissioned",
+         "depends_on": "eval:doc.custom_is_commissioned"},
+    ],
     "Serial No": [
         {"fieldname": "custom_installation_date", "label": "Installation Date", "fieldtype": "Date", "insert_after": "warranty_expiry_date"},
         {"fieldname": "custom_status", "label": "Operational Status", **DATA, "insert_after": "custom_installation_date"},
