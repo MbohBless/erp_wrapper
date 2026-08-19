@@ -8,6 +8,8 @@ import { Icon } from "@/components/icons";
 import { groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import Combobox from "@/components/ui/Combobox";
+import { useDebounced } from "@/components/ui/hooks";
 import { listCustomers } from "@/lib/customers";
 import { listProducts } from "@/lib/products";
 import {
@@ -67,8 +69,25 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
   // the number changing is the one thing about an amendment a user must see.
   const [posted, setPosted] = useState<string | null>(null);
 
-  const customersQ = useQuery({ queryKey: ["customers", "", ""], queryFn: () => listCustomers(token as string) });
-  const productsQ = useQuery({ queryKey: ["products", ""], queryFn: () => listProducts(token as string) });
+  // Searches ERPNext as the user types rather than loading a fixed slice
+  // of the master list. Loaded whole the list is capped, and past the cap
+  // a record is simply unselectable with nothing on screen to say why.
+  const customerSearch = useDebounced(customer);
+  const customersQ = useQuery({
+    queryKey: ["customers", "picker", customerSearch],
+    queryFn: () =>
+      listCustomers(token as string, { search: customerSearch || undefined, limit: 20 }),
+    enabled: !!token,
+  });
+  // The item picker still loads a slice of the catalogue rather than
+  // searching it. Explicit rather than relying on the default, so the
+  // ceiling is visible in the code: past this many products a SKU would
+  // be unselectable here. Fine at a catalogue of tens; revisit at
+  // hundreds, when this needs the same treatment as the party picker.
+  const productsQ = useQuery({
+    queryKey: ["products", "picker"],
+    queryFn: () => listProducts(token as string, { limit: 500 }),
+  });
   const products = productsQ.data ?? [];
 
   const setRow = (i: number, patch: Partial<Row>) =>
@@ -151,6 +170,13 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
   function onSave() {
     setError(null);
     if (!customer) { setError(t("sales.err.customer")); setTab("details"); return; }
+    // A customer must be one ERPNext knows. Typed free-hand it fails there as
+    // an opaque link error, well after the user has stopped looking at it.
+    if (!(customersQ.data ?? []).some((c) => c.id === customer)) {
+      setError(t("sales.err.customerUnknown").replace("{name}", customer));
+      setTab("details");
+      return;
+    }
     if (!rows.some((r) => r.item_code.trim())) { setError(t("sales.err.items")); setTab("items"); return; }
     if (commissioned && !agent.trim()) { setError(t("sales.err.agent")); setTab("details"); return; }
     save.mutate();
@@ -246,10 +272,17 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
             </label>
             <div>
               <label className={LABEL}>{t("sales.customer")} *</label>
-              <select className={FIELD} value={customer} onChange={(e) => setCustomer(e.target.value)} required>
-                <option value="">{t("sales.selectCustomer")}</option>
-                {(customersQ.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <Combobox
+                value={customer}
+                onChange={setCustomer}
+                options={(customersQ.data ?? []).map((c) => ({
+                  value: c.id,
+                  hint: c.name !== c.id ? c.name : null,
+                }))}
+                placeholder={t("sales.selectCustomer")}
+                emptyHint={t("sales.customerNoMatch")}
+                required
+              />
             </div>
             <div>
               <label className={LABEL}>{t("sales.paymentDueDate")}</label>

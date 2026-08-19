@@ -15,10 +15,11 @@ class SupplierService:
         search: str | None = None,
         supplier_type: str | None = None,
         group: str | None = None,
+        disabled: bool | None = None,
         limit: int = 20,
         start: int = 0,
     ) -> list[SupplierRead]:
-        return await self.repo.list(search, supplier_type, group, limit, start)
+        return await self.repo.list(search, supplier_type, group, disabled, limit, start)
 
     async def get(self, name: str) -> SupplierRead:
         supplier = await self.repo.get(name)

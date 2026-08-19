@@ -31,7 +31,7 @@ export type SupplierInput = {
 
 export const listSuppliers = (
   token: string,
-  params: Paged & { search?: string; supplier_type?: string } = {}
+  params: Paged & { search?: string; supplier_type?: string; disabled?: boolean } = {}
 ) => api.get<Supplier[]>(token, "/suppliers", { limit: 200, ...params });
 
 export const createSupplier = (token: string, input: SupplierInput) =>

@@ -22,10 +22,11 @@ class CustomerService:
         search: str | None = None,
         customer_type: str | None = None,
         group: str | None = None,
+        disabled: bool | None = None,
         limit: int = 50,
         start: int = 0,
     ) -> list[CustomerRead]:
-        return await self.repo.list(search, customer_type, group, limit, start)
+        return await self.repo.list(search, customer_type, group, disabled, limit, start)
 
     async def get(self, name: str) -> CustomerRead:
         customer = await self.repo.get(name)

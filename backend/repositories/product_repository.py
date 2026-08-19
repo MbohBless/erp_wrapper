@@ -60,6 +60,7 @@ class ProductRepository:
         self,
         search: str | None = None,
         category: str | None = None,
+        disabled: bool | None = None,
         limit: int = 20,
         start: int = 0,
     ) -> list[ProductRead]:
@@ -68,6 +69,11 @@ class ProductRepository:
             filters.append(["item_name", "like", f"%{search}%"])
         if category:
             filters.append(["item_group", "=", category])
+        # Applied by ERPNext, not after the fact. Filtering the fetched page
+        # here would only ever filter the page in front of the user and
+        # silently hide every match on the others.
+        if disabled is not None:
+            filters.append(["disabled", "=", 1 if disabled else 0])
         docs = await self.client.list_documents(
             self.DOCTYPE,
             fields=_READ_FIELDS,

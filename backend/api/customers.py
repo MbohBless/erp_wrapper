@@ -23,11 +23,12 @@ async def list_customers(
     search: str | None = None,
     customer_type: str | None = None,
     group: str | None = None,
+    disabled: bool | None = None,
     limit: int = 50,
     start: int = 0,
     service: CustomerService = Depends(get_customer_service),
 ) -> list[CustomerRead]:
-    return await service.list(search, customer_type, group, limit, start)
+    return await service.list(search, customer_type, group, disabled, limit, start)
 
 
 @router.post(

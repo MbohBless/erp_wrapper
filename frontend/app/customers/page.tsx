@@ -12,7 +12,8 @@ import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
 import { ActiveTag } from "@/components/ui/StatusTag";
 import TableSkeleton from "@/components/ui/TableSkeleton";
-import { useDebounced } from "@/components/ui/hooks";
+import Pagination from "@/components/ui/Pagination";
+import { useDebounced, usePaged } from "@/components/ui/hooks";
 import { UnauthorizedError, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { type Customer, deleteCustomer, listCustomers } from "@/lib/customers";
@@ -46,27 +47,33 @@ function CustomersContent() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const search = useDebounced(searchInput);
+  const paged = usePaged([search, typeFilter, statusFilter]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["customers", search, typeFilter],
+    queryKey: ["customers", search, typeFilter, statusFilter, paged.page],
     queryFn: () =>
       listCustomers(token as string, {
         search: search || undefined,
         customer_type: typeFilter || undefined,
+        // Active/disabled is decided by ERPNext, not by filtering
+        // the fetched page — that would hide every match on the
+        // pages the user is not looking at.
+        disabled: statusFilter ? statusFilter === "disabled" : undefined,
+        limit: paged.fetchLimit,
+        start: paged.start,
       }),
     enabled: !!token,
+    placeholderData: (prev) => prev,
   });
 
   useEffect(() => {
     if (error instanceof UnauthorizedError) logout();
   }, [error, logout]);
 
-  const rows = useMemo(() => {
-    const list = data ?? [];
-    if (statusFilter === "active") return list.filter((c) => !c.disabled);
-    if (statusFilter === "disabled") return list.filter((c) => c.disabled);
-    return list;
-  }, [data, statusFilter]);
+  // One row past the page was fetched only to learn whether another
+  // page exists; trim it before rendering.
+  const rows = useMemo(() => (data ?? []).slice(0, paged.size), [data, paged.size]);
+  const hasNext = (data?.length ?? 0) > paged.size;
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteCustomer(token as string, id),
@@ -216,6 +223,13 @@ function CustomersContent() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={paged.page}
+          size={paged.size}
+          count={rows.length}
+          hasNext={hasNext}
+          onChange={paged.setPage}
+        />
       </Blueprint>
 
       {/* Dialogs */}

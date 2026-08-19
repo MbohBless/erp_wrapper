@@ -23,11 +23,12 @@ async def list_suppliers(
     search: str | None = None,
     supplier_type: str | None = None,
     group: str | None = None,
+    disabled: bool | None = None,
     limit: int = 20,
     start: int = 0,
     service: SupplierService = Depends(get_supplier_service),
 ) -> list[SupplierRead]:
-    return await service.list(search, supplier_type, group, limit, start)
+    return await service.list(search, supplier_type, group, disabled, limit, start)
 
 
 @router.post(

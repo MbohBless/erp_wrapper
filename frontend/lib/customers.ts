@@ -32,7 +32,7 @@ export type CustomerInput = {
 
 export const listCustomers = (
   token: string,
-  params: Paged & { search?: string; customer_type?: string } = {}
+  params: Paged & { search?: string; customer_type?: string; disabled?: boolean } = {}
 ) => api.get<Customer[]>(token, "/customers", { limit: 200, ...params });
 
 export const createCustomer = (token: string, input: CustomerInput) =>

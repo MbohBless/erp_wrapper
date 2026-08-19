@@ -60,6 +60,7 @@ class SupplierRepository:
         search: str | None = None,
         supplier_type: str | None = None,
         group: str | None = None,
+        disabled: bool | None = None,
         limit: int = 20,
         start: int = 0,
     ) -> list[SupplierRead]:
@@ -70,6 +71,11 @@ class SupplierRepository:
             filters.append(["supplier_type", "=", supplier_type])
         if group:
             filters.append(["supplier_group", "=", group])
+        # Applied by ERPNext, not after the fact. Filtering the fetched page
+        # here would only ever filter the page in front of the user and
+        # silently hide every match on the others.
+        if disabled is not None:
+            filters.append(["disabled", "=", 1 if disabled else 0])
         docs = await self.client.list_documents(
             self.DOCTYPE,
             fields=_READ_FIELDS,

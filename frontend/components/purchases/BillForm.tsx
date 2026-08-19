@@ -8,6 +8,8 @@ import { Icon } from "@/components/icons";
 import { groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import Combobox from "@/components/ui/Combobox";
+import { useDebounced } from "@/components/ui/hooks";
 import { listProducts } from "@/lib/products";
 import { listSuppliers } from "@/lib/suppliers";
 import {
@@ -56,8 +58,25 @@ export default function BillForm({ amending }: { amending?: PurchaseInvoice }) {
   const [error, setError] = useState<string | null>(null);
   const [posted, setPosted] = useState<string | null>(null);
 
-  const suppliersQ = useQuery({ queryKey: ["suppliers", "", ""], queryFn: () => listSuppliers(token as string) });
-  const productsQ = useQuery({ queryKey: ["products", ""], queryFn: () => listProducts(token as string) });
+  // Searches ERPNext as the user types rather than loading a fixed slice
+  // of the master list. Loaded whole the list is capped, and past the cap
+  // a record is simply unselectable with nothing on screen to say why.
+  const supplierSearch = useDebounced(supplier);
+  const suppliersQ = useQuery({
+    queryKey: ["suppliers", "picker", supplierSearch],
+    queryFn: () =>
+      listSuppliers(token as string, { search: supplierSearch || undefined, limit: 20 }),
+    enabled: !!token,
+  });
+  // The item picker still loads a slice of the catalogue rather than
+  // searching it. Explicit rather than relying on the default, so the
+  // ceiling is visible in the code: past this many products a SKU would
+  // be unselectable here. Fine at a catalogue of tens; revisit at
+  // hundreds, when this needs the same treatment as the party picker.
+  const productsQ = useQuery({
+    queryKey: ["products", "picker"],
+    queryFn: () => listProducts(token as string, { limit: 500 }),
+  });
   const products = productsQ.data ?? [];
 
   const setRow = (i: number, patch: Partial<Row>) =>
@@ -104,6 +123,11 @@ export default function BillForm({ amending }: { amending?: PurchaseInvoice }) {
   function onSave() {
     setError(null);
     if (!supplier) { setError(t("purchases.err.supplier")); setTab("details"); return; }
+    if (!(suppliersQ.data ?? []).some((s) => s.id === supplier)) {
+      setError(t("purchases.err.supplierUnknown").replace("{name}", supplier));
+      setTab("details");
+      return;
+    }
     if (!rows.some((r) => r.item_code.trim())) { setError(t("purchases.err.items")); setTab("items"); return; }
     save.mutate();
   }
@@ -193,10 +217,17 @@ export default function BillForm({ amending }: { amending?: PurchaseInvoice }) {
             </div>
             <div>
               <label className={LABEL}>{t("purchases.supplier")} *</label>
-              <select className={FIELD} value={supplier} onChange={(e) => setSupplier(e.target.value)} required>
-                <option value="">{t("purchases.selectSupplier")}</option>
-                {(suppliersQ.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <Combobox
+                value={supplier}
+                onChange={setSupplier}
+                options={(suppliersQ.data ?? []).map((s) => ({
+                  value: s.id,
+                  hint: s.name !== s.id ? s.name : null,
+                }))}
+                placeholder={t("purchases.selectSupplier")}
+                emptyHint={t("purchases.supplierNoMatch")}
+                required
+              />
             </div>
           </div>
         )}

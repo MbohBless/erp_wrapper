@@ -31,7 +31,7 @@ export type ProductInput = {
 
 export const listProducts = (
   token: string,
-  params: Paged & { search?: string; category?: string } = {}
+  params: Paged & { search?: string; category?: string; disabled?: boolean } = {}
 ) => api.get<Product[]>(token, "/products", { limit: 200, ...params });
 
 export const createProduct = (token: string, input: ProductInput) =>

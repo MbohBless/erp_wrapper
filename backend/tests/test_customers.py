@@ -106,3 +106,53 @@ def test_store_keeper_cannot_view(client, make_token, fake_erpnext):
 
 def test_unauthenticated_rejected(client, fake_erpnext):
     assert client.get("/customers").status_code == 401
+
+
+# --- The active/disabled filter belongs to ERPNext, not to the page ------
+
+
+def _disabled_ids(client, token, **params):
+    from urllib.parse import urlencode
+    resp = client.get("/customers?" + urlencode(params), headers=auth_header(token))
+    assert resp.status_code == 200, resp.text
+    return [c["id"] for c in resp.json()]
+
+
+def test_disabled_filter_is_applied_by_erpnext(client, admin_token, fake_erpnext):
+    """Once the list is paged, filtering the fetched rows here would only ever
+    filter the page in front of the user — every match on the other pages would
+    silently disappear."""
+    live = client.post("/customers", json={"name": "Live Clinic"},
+                       headers=auth_header(admin_token)).json()["id"]
+    gone = client.post("/customers", json={"name": "Closed Clinic"},
+                       headers=auth_header(admin_token)).json()["id"]
+    client.put(f"/customers/{gone}", json={"disabled": True},
+               headers=auth_header(admin_token))
+
+    assert live in _disabled_ids(client, admin_token, disabled=False)
+    assert gone not in _disabled_ids(client, admin_token, disabled=False)
+    assert gone in _disabled_ids(client, admin_token, disabled=True)
+    assert live not in _disabled_ids(client, admin_token, disabled=True)
+
+    both = _disabled_ids(client, admin_token)
+    assert {live, gone} <= set(both), "omitting the filter should show both"
+
+
+def test_paging_customers_covers_each_exactly_once(client, admin_token, fake_erpnext):
+    made = {client.post("/customers", json={"name": f"Clinique {i}"},
+                        headers=auth_header(admin_token)).json()["id"]
+            for i in range(7)}
+
+    size, seen, page = 3, [], 0
+    while page < 10:
+        batch = client.get("/customers", params={"limit": size + 1, "start": page * size},
+                           headers=auth_header(admin_token)).json()
+        seen.extend(c["id"] for c in batch[:size])
+        if len(batch) <= size:
+            break
+        page += 1
+    else:
+        raise AssertionError("paging never reached the end — is `start` ignored?")
+
+    assert len(seen) == len(set(seen)), "a customer appeared on two pages"
+    assert made <= set(seen), "a customer never appeared on any page"
