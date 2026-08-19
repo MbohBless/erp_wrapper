@@ -96,7 +96,7 @@ is multi-tenant, and the next workspace may want it.
 ```bash
 # Backend (backend/)
 python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
-pytest                        # 150 tests; ERPNext faked, temp SQLite — no live ERPNext
+pytest                        # 416 tests; ERPNext faked, temp SQLite — no live ERPNext
 uvicorn main:app --reload     # dev server on :8000
 
 # Frontend (frontend/)

@@ -432,7 +432,7 @@ console as `FIRST_OWNER_EMAIL`, create a workspace, then provision it.
 ### Tests
 
 ```bash
-cd backend       && pytest    # 150 tests, incl. tests/test_tenancy.py
+cd backend       && pytest    # 416 tests, incl. tests/test_tenancy.py
 cd platform/api  && pytest    #  34 tests
 cd frontend      && npm run build
 cd platform/ui   && npm run build

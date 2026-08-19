@@ -162,7 +162,7 @@ MariaDB · Redis · Caddy · Docker Compose.
 
 ## Testing
 
-`backend/tests/` — 16 pytest modules, 150 tests. ERPNext is replaced by an
+`backend/tests/` — 26 pytest modules, 416 tests. ERPNext is replaced by an
 in-memory `FakeERPNextClient` (dependency-overridden), and the app-auth DB uses
 a temp SQLite; the suite covers CRUD, RBAC, domain actions (install, complete,
 receive/issue), search/filter, and the integration wrappers — no live ERPNext

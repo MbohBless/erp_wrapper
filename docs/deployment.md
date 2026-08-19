@@ -392,7 +392,7 @@ docker compose down -v                # stop and DELETE all data
 
 ```bash
 cd backend && python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt && pytest        # 150 tests, no live ERPNext needed
+pip install -r requirements.txt && pytest        # 416 tests, no live ERPNext needed
 cd ../frontend && npm install && npm run build   # type-check + production build
 
 # Control plane (SaaS plane only)
