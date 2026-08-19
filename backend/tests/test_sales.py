@@ -432,3 +432,46 @@ def test_amending_keeps_the_sale_commissioned(client, admin_token, fake_erpnext)
     posted = fake_erpnext.store[amended["id"]]
     assert posted["custom_is_commissioned"] == 1
     assert posted["items"][0]["price_list_rate"] == 87500
+
+
+# --- Paging --------------------------------------------------------------
+
+
+def test_pages_cover_every_invoice_exactly_once(client, admin_token, fake_erpnext):
+    """The list page asks for one row more than it shows, to learn whether there
+    is another page. What must hold is that walking the pages yields every
+    invoice and none of them twice."""
+    made = {_create(client, admin_token, customer=f"Clinique {i}").json()["id"]
+            for i in range(7)}
+
+    size, seen, page = 3, [], 0
+    # Bounded, not `while True`. A `start` that is ignored makes every page
+    # identical, so an unbounded walk would hang instead of failing — and a
+    # test that hangs on the bug it is meant to catch reports nothing at all.
+    while page < 10:
+        batch = client.get(
+            "/sales", params={"limit": size + 1, "start": page * size},
+            headers=auth_header(admin_token),
+        ).json()
+        seen.extend(i["id"] for i in batch[:size])
+        if len(batch) <= size:
+            break
+        page += 1
+    else:
+        raise AssertionError("paging never reached the end — is `start` ignored?")
+
+    assert len(seen) == len(set(seen)), "an invoice appeared on two pages"
+    assert made <= set(seen), "an invoice never appeared on any page"
+
+
+def test_the_probe_row_is_what_reveals_a_next_page(client, admin_token, fake_erpnext):
+    for i in range(4):
+        _create(client, admin_token, customer=f"Hopital {i}")
+
+    def fetch(limit, start=0):
+        return client.get("/sales", params={"limit": limit, "start": start},
+                          headers=auth_header(admin_token)).json()
+
+    # Four invoices, pages of three: the fourth row is the signal.
+    assert len(fetch(4)) == 4          # asked for size+1, got it -> more exists
+    assert len(fetch(4, start=3)) == 1  # last page returns fewer than asked

@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type SupplierType = "Company" | "Individual";
 
@@ -31,8 +31,8 @@ export type SupplierInput = {
 
 export const listSuppliers = (
   token: string,
-  params: { search?: string; supplier_type?: string } = {}
-) => api.get<Supplier[]>(token, "/suppliers", { ...params, limit: 200 });
+  params: Paged & { search?: string; supplier_type?: string } = {}
+) => api.get<Supplier[]>(token, "/suppliers", { limit: 200, ...params });
 
 export const createSupplier = (token: string, input: SupplierInput) =>
   api.post<Supplier>(token, "/suppliers", input);

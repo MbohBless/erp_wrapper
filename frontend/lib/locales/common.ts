@@ -37,6 +37,11 @@ export const common = {
     "action.close": "Close",
     "action.saving": "Saving…",
     "common.loading": "Loading…",
+    "common.showingRange": "Showing {first}–{last}",
+    "common.pageEmpty": "Nothing on this page",
+    "common.previous": "Previous",
+    "common.next": "Next",
+
     "common.status": "Status",
     "common.actions": "Actions",
     "common.active": "Active",
@@ -103,6 +108,11 @@ export const common = {
     "action.close": "Fermer",
     "action.saving": "Enregistrement…",
     "common.loading": "Chargement…",
+    "common.showingRange": "Affichage de {first} à {last}",
+    "common.pageEmpty": "Rien sur cette page",
+    "common.previous": "Précédent",
+    "common.next": "Suivant",
+
     "common.status": "Statut",
     "common.actions": "Actions",
     "common.active": "Actif",

@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type EquipmentStatus =
   | "In Store"
@@ -28,8 +28,8 @@ export type EquipmentInput = {
 
 export const listEquipment = (
   token: string,
-  params: { search?: string; status?: string } = {}
-) => api.get<Equipment[]>(token, "/equipment", { ...params, limit: 200 });
+  params: Paged & { search?: string; status?: string } = {}
+) => api.get<Equipment[]>(token, "/equipment", { limit: 200, ...params });
 
 export const createEquipment = (token: string, input: EquipmentInput) =>
   api.post<Equipment>(token, "/equipment", input);

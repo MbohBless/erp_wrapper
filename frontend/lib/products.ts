@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type Product = {
   id: string;
@@ -31,8 +31,8 @@ export type ProductInput = {
 
 export const listProducts = (
   token: string,
-  params: { search?: string; category?: string } = {}
-) => api.get<Product[]>(token, "/products", { ...params, limit: 200 });
+  params: Paged & { search?: string; category?: string } = {}
+) => api.get<Product[]>(token, "/products", { limit: 200, ...params });
 
 export const createProduct = (token: string, input: ProductInput) =>
   api.post<Product>(token, "/products", input);

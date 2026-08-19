@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type BillLine = {
   item_code: string;
@@ -35,8 +35,8 @@ export type PurchaseInput = {
 
 export const listPurchases = (
   token: string,
-  params: { search?: string; status?: string } = {}
-) => api.get<PurchaseInvoice[]>(token, "/purchases", { ...params, limit: 200 });
+  params: Paged & { search?: string; status?: string } = {}
+) => api.get<PurchaseInvoice[]>(token, "/purchases", { limit: 200, ...params });
 
 export const getPurchase = (token: string, id: string) =>
   api.get<PurchaseInvoice>(token, `/purchases/${encodeId(id)}`);

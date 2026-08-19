@@ -12,7 +12,8 @@ import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
 import StatusTag, { type Tone } from "@/components/ui/StatusTag";
 import TableSkeleton from "@/components/ui/TableSkeleton";
-import { useDebounced } from "@/components/ui/hooks";
+import Pagination from "@/components/ui/Pagination";
+import { useDebounced, usePaged } from "@/components/ui/hooks";
 import { UnauthorizedError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -57,22 +58,29 @@ function EquipmentContent() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const search = useDebounced(searchInput);
+  const paged = usePaged([search, statusFilter]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["equipment", search, statusFilter],
+    queryKey: ["equipment", search, statusFilter, paged.page],
     queryFn: () =>
       listEquipment(token as string, {
         search: search || undefined,
         status: statusFilter || undefined,
+        limit: paged.fetchLimit,
+        start: paged.start,
       }),
     enabled: !!token,
+    placeholderData: (prev) => prev,
   });
 
   useEffect(() => {
     if (error instanceof UnauthorizedError) logout();
   }, [error, logout]);
 
-  const rows = useMemo(() => data ?? [], [data]);
+  // One row past the page was fetched only to learn whether there is a
+  // next page; trim it before rendering.
+  const rows = useMemo(() => (data ?? []).slice(0, paged.size), [data, paged.size]);
+  const hasNext = (data?.length ?? 0) > paged.size;
   const invalidate = () => qc.invalidateQueries({ queryKey: ["equipment"] });
 
   const editHref = (eq: Equipment) => `/equipment/${encodeURIComponent(eq.id)}/edit`;
@@ -183,6 +191,13 @@ function EquipmentContent() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={paged.page}
+          size={paged.size}
+          count={rows.length}
+          hasNext={hasNext}
+          onChange={paged.setPage}
+        />
       </Blueprint>
 
       {dialog?.kind === "view" && (

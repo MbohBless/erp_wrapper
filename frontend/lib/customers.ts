@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type CustomerType = "Company" | "Individual";
 
@@ -32,8 +32,8 @@ export type CustomerInput = {
 
 export const listCustomers = (
   token: string,
-  params: { search?: string; customer_type?: string } = {}
-) => api.get<Customer[]>(token, "/customers", { ...params, limit: 200 });
+  params: Paged & { search?: string; customer_type?: string } = {}
+) => api.get<Customer[]>(token, "/customers", { limit: 200, ...params });
 
 export const createCustomer = (token: string, input: CustomerInput) =>
   api.post<Customer>(token, "/customers", input);

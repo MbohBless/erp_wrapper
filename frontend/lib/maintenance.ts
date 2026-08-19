@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type MaintenanceStatus =
   | "Open"
@@ -31,8 +31,8 @@ export type TicketInput = {
 
 export const listTickets = (
   token: string,
-  params: { search?: string; status?: string } = {}
-) => api.get<Ticket[]>(token, "/maintenance", { ...params, limit: 200 });
+  params: Paged & { search?: string; status?: string } = {}
+) => api.get<Ticket[]>(token, "/maintenance", { limit: 200, ...params });
 
 export const createTicket = (token: string, input: TicketInput) =>
   api.post<Ticket>(token, "/maintenance", input);

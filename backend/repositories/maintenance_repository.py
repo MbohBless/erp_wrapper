@@ -91,7 +91,12 @@ class MaintenanceRepository:
             filters=filters or None,
             limit=limit,
             start=start,
-            order_by="mntc_date desc",
+            # `name` breaks ties. Ordering on the date alone leaves rows that
+            # share one in whatever order the database happens to return, which
+            # is not stable between queries — so paging could show a row twice
+            # and skip another. The document id is unique, so this makes the
+            # order total.
+            order_by="mntc_date desc, name desc",
         )
         return [_from_erpnext(doc) for doc in docs]
 

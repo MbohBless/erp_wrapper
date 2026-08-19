@@ -5,6 +5,16 @@ import { getAccessToken, refreshAccessToken } from "@/lib/session";
 
 export class UnauthorizedError extends Error {}
 
+/**
+ * Server-side paging, as every list endpoint takes it.
+ *
+ * Omitting these is not "give me everything" — it is a default page size, and
+ * anything past it is simply absent with nothing to say so. A list page should
+ * always pass them; only the form pickers, which need a whole short list, rely
+ * on the default.
+ */
+export type Paged = { limit?: number; start?: number };
+
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
 function buildQuery(params?: QueryParams): string {

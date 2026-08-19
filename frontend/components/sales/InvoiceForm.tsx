@@ -87,6 +87,25 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
   const listRate = (code: string) =>
     products.find((p) => p.id === code)?.selling_price ?? undefined;
 
+  /**
+   * Unticking has to put the prices back.
+   *
+   * Otherwise the flag is trivially defeated: tick it, drop the rate, untick
+   * it, and the invoice goes out below list with no reason recorded anywhere —
+   * exactly the hole the lock exists to close.
+   */
+  function toggleCommissioned(next: boolean) {
+    setCommissioned(next);
+    if (next) return;
+    setAgent("");
+    setRows((rs) =>
+      rs.map((r) => {
+        const list = listRate(r.item_code);
+        return list != null ? { ...r, rate: groupNum(String(list)) } : r;
+      })
+    );
+  }
+
   const totals = useMemo(() => {
     let qty = 0, amount = 0, given = 0;
     for (const r of rows) {
@@ -243,7 +262,7 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
             <div className="md:col-span-3 pt-2 border-t border-divider">
               <label className="flex items-center gap-2.5 text-sm cursor-pointer">
                 <input type="checkbox" checked={commissioned}
-                  onChange={(e) => setCommissioned(e.target.checked)} />
+                  onChange={(e) => toggleCommissioned(e.target.checked)} />
                 {t("sales.commissioned")}
               </label>
               <p className="text-xs muted mt-1.5 max-w-xl">{t("sales.commissionedHint")}</p>
@@ -262,7 +281,12 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
         {/* Items */}
         {tab === "items" && (
           <div className="p-6">
-            <div className="text-[11px] tracking-[0.08em] uppercase muted mb-3">{t("sales.items")}</div>
+            <div className="flex items-baseline justify-between gap-4 mb-3">
+              <div className="text-[11px] tracking-[0.08em] uppercase muted">{t("sales.items")}</div>
+              {!commissioned && (
+                <div className="text-xs muted-2">{t("sales.rateLockedHint")}</div>
+              )}
+            </div>
             <div className="overflow-x-auto eq-scroll border border-divider rounded-xl">
               <table className="w-full text-sm border-collapse min-w-[720px]">
                 <thead>
@@ -297,15 +321,31 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
                           <input className={`${CELL} text-right`} type="number" min="0" step="any" value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value })} />
                         </td>
                         <td className="px-2 py-2">
-                          <input className={`${CELL} text-right`} inputMode="numeric" value={r.rate} onChange={(e) => setRow(i, { rate: groupNum(e.target.value) })} />
                           {(() => {
                             const list = listRate(r.item_code);
+                            // Locked to the catalogue price unless the sale is
+                            // marked commissioned. An item with no price on
+                            // file has nothing to lock to, so it stays open —
+                            // otherwise it could never be invoiced at all.
+                            const locked = !commissioned && list != null;
                             const charged = parseNum(r.rate) || 0;
-                            if (list == null || charged <= 0 || list <= charged) return null;
                             return (
-                              <div className="text-[11px] muted-2 text-right mt-1">
-                                {t("sales.listPrice")} {xaf(list)}
-                              </div>
+                              <>
+                                <input
+                                  className={`${CELL} text-right ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
+                                  inputMode="numeric"
+                                  value={r.rate}
+                                  readOnly={locked}
+                                  tabIndex={locked ? -1 : undefined}
+                                  title={locked ? t("sales.rateLocked") : undefined}
+                                  onChange={(e) => setRow(i, { rate: groupNum(e.target.value) })}
+                                />
+                                {list != null && charged > 0 && list > charged && (
+                                  <div className="text-[11px] muted-2 text-right mt-1">
+                                    {t("sales.listPrice")} {xaf(list)}
+                                  </div>
+                                )}
+                              </>
                             );
                           })()}
                         </td>
