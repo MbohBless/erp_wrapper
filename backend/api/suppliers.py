@@ -14,7 +14,10 @@ from services.supplier_service import SupplierService
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
-can_view = require_roles(Role.MANAGER, Role.ACCOUNTANT, Role.STORE_KEEPER)
+# Not the Accountant. They see what is owed to suppliers in Finance — the
+# payables ledger and the statements — but the supplier records and the
+# bills behind them are the Manager's to operate.
+can_view = require_roles(Role.MANAGER, Role.STORE_KEEPER)
 can_manage = require_roles(Role.MANAGER)
 
 

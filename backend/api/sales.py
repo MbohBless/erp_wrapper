@@ -2,7 +2,7 @@
 
 Access (Administrator always allowed):
   - view (list/get):  Manager, Sales, Accountant
-  - create:           Manager, Sales
+  - create:           Manager, Sales, Accountant
   - amend (edit):     Manager
 
 Amending is narrower than creating on purpose: it cancels a posted invoice and
@@ -19,7 +19,7 @@ from services.sales_service import SalesService
 router = APIRouter(prefix="/sales", tags=["sales"])
 
 can_view = require_roles(Role.MANAGER, Role.SALES, Role.ACCOUNTANT)
-can_manage = require_roles(Role.MANAGER, Role.SALES)
+can_manage = require_roles(Role.MANAGER, Role.SALES, Role.ACCOUNTANT)
 can_amend = require_roles(Role.MANAGER)
 
 

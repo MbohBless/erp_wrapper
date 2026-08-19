@@ -181,3 +181,12 @@ def test_only_manager_and_administrator_may_amend(
     assert fake_erpnext.store[original]["docstatus"] == 1
 
     assert _amend(client, make_token("Manager"), original).status_code == 200
+
+
+def test_accountant_cannot_reach_purchases(client, admin_token, make_token, fake_erpnext):
+    """Purchases are the Manager's. The Accountant still sees what is owed —
+    the payables ledger, the cash book, the statements — through Finance."""
+    _create(client, admin_token)
+    token = make_token("Accountant")
+    assert client.get("/purchases", headers=auth_header(token)).status_code == 403
+    assert _create(client, token).status_code == 403

@@ -75,6 +75,7 @@ MATRIX: dict[tuple[str, str], object] = {
     ("PUT", "/users/{user_id}"): frozenset(),
     ("DELETE", "/users/{user_id}"): frozenset(),
     ("GET", "/users/{user_id}"): SELF_OR_ADMIN,
+    ("GET", "/users/roles"): frozenset(),  # Administrator only
     # --- reference data for form pickers -------------------------------------
     # Taxonomy labels only ("Commercial", "Cameroon", "Nos"); every form that
     # uses one is guarded on its own write.
@@ -90,12 +91,16 @@ MATRIX: dict[tuple[str, str], object] = {
     # --- customers ----------------------------------------------------------
     ("GET", "/customers"): frozenset({M, S, C}),
     ("GET", "/customers/{customer_id}"): frozenset({M, S, C}),
-    ("POST", "/customers"): frozenset({M, S}),
-    ("PUT", "/customers/{customer_id}"): frozenset({M, S}),
+    # The Accountant raises the invoices here, so they must be able to put a
+    # first-time buyer on file rather than stall the sale.
+    ("POST", "/customers"): frozenset({M, S, C}),
+    ("PUT", "/customers/{customer_id}"): frozenset({M, S, C}),
     ("DELETE", "/customers/{customer_id}"): frozenset({M, S}),
     # --- suppliers ----------------------------------------------------------
-    ("GET", "/suppliers"): frozenset({M, K, C}),
-    ("GET", "/suppliers/{supplier_id}"): frozenset({M, K, C}),
+    # Suppliers and purchases are the Manager's to operate. The Accountant
+    # still sees what is owed, through Finance.
+    ("GET", "/suppliers"): frozenset({M, K}),
+    ("GET", "/suppliers/{supplier_id}"): frozenset({M, K}),
     ("POST", "/suppliers"): frozenset({M}),
     ("PUT", "/suppliers/{supplier_id}"): frozenset({M}),
     ("DELETE", "/suppliers/{supplier_id}"): frozenset({M}),
@@ -114,13 +119,13 @@ MATRIX: dict[tuple[str, str], object] = {
     # --- sales / purchases --------------------------------------------------
     ("GET", "/sales"): frozenset({M, S, C}),
     ("GET", "/sales/{invoice_id}"): frozenset({M, S, C}),
-    ("POST", "/sales"): frozenset({M, S}),
+    ("POST", "/sales"): frozenset({M, S, C}),
     # Editing a posted invoice cancels it and re-posts a replacement, moving
     # money already in the ledger. Sales may raise one; only a Manager may
     # unwind one.
     ("PUT", "/sales/{invoice_id}"): frozenset({M}),
-    ("GET", "/purchases"): frozenset({M, K, C}),
-    ("GET", "/purchases/{bill_id}"): frozenset({M, K, C}),
+    ("GET", "/purchases"): frozenset({M, K}),
+    ("GET", "/purchases/{bill_id}"): frozenset({M, K}),
     ("POST", "/purchases"): frozenset({M}),
     ("PUT", "/purchases/{bill_id}"): frozenset({M}),
     # --- equipment ----------------------------------------------------------
@@ -149,7 +154,8 @@ MATRIX: dict[tuple[str, str], object] = {
     ("GET", "/finance/reports/income-statement"): frozenset({M, C}),
     ("GET", "/payments"): frozenset({M, C}),
     ("POST", "/payments/receive"): frozenset({M, C}),
-    ("POST", "/payments/pay"): frozenset({M, C}),
+    # Money out settles a supplier bill, which is a purchase operation.
+    ("POST", "/payments/pay"): frozenset({M}),
     ("GET", "/budget"): frozenset({M, C}),
     ("PUT", "/budget"): frozenset({M, C}),
     ("GET", "/reports/{report_key}/pdf"): frozenset({M, C}),

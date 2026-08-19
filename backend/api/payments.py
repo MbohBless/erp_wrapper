@@ -1,6 +1,13 @@
 """Payment endpoints with RBAC. Thin controllers — logic in PaymentService.
 
-Access (Administrator always allowed): Manager, Accountant.
+Access (Administrator always allowed):
+  - view:     Manager, Accountant
+  - receive:  Manager, Accountant  (money in, against a sales invoice)
+  - pay:      Manager              (money out, against a supplier bill)
+
+The split follows the supplier boundary. The Accountant sees every payment and
+records what customers pay, but settling a bill is an operation on a purchase —
+and purchases are the Manager's.
 """
 
 from fastapi import APIRouter, Depends, status
@@ -13,7 +20,8 @@ from services.payment_service import PaymentService
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 can_view = require_roles(Role.MANAGER, Role.ACCOUNTANT)
-can_manage = require_roles(Role.MANAGER, Role.ACCOUNTANT)
+can_receive = require_roles(Role.MANAGER, Role.ACCOUNTANT)
+can_pay = require_roles(Role.MANAGER)
 
 
 @router.get("", response_model=list[PaymentRead], dependencies=[Depends(can_view)])
@@ -29,7 +37,7 @@ async def list_payments(
     "/receive",
     response_model=PaymentRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(can_manage)],
+    dependencies=[Depends(can_receive)],
 )
 async def receive_payment(
     data: PaymentReceive,
@@ -42,7 +50,7 @@ async def receive_payment(
     "/pay",
     response_model=PaymentRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(can_manage)],
+    dependencies=[Depends(can_pay)],
 )
 async def make_payment(
     data: PaymentPay,

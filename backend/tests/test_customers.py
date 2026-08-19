@@ -92,11 +92,24 @@ def test_sales_can_manage_customers(client, make_token, fake_erpnext):
     assert _create(client, token, name="Sales Co").status_code == 201
 
 
-def test_accountant_can_view_but_not_write(client, admin_token, make_token, fake_erpnext):
-    _create(client, admin_token, name="View Co")
+def test_accountant_can_add_and_edit_but_not_delete(
+    client, admin_token, make_token, fake_erpnext
+):
+    """The Accountant raises the invoices here, so a first-time buyer must not
+    stall the sale. Deleting is a different thing: a customer carries invoices
+    and a ledger history behind them."""
     token = make_token("Accountant")
     assert client.get("/customers", headers=auth_header(token)).status_code == 200
-    assert _create(client, token, name="Nope Co").status_code == 403
+
+    created = _create(client, token, name="Clinique Nouvelle")
+    assert created.status_code == 201, created.text
+    cid = created.json()["id"]
+
+    edited = client.put(f"/customers/{cid}", json={"phone": "+237 655 00 00 00"},
+                        headers=auth_header(token))
+    assert edited.status_code == 200, edited.text
+
+    assert client.delete(f"/customers/{cid}", headers=auth_header(token)).status_code == 403
 
 
 def test_store_keeper_cannot_view(client, make_token, fake_erpnext):

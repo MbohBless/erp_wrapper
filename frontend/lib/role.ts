@@ -40,8 +40,10 @@ export const NAV_ROLES: Record<string, readonly Role[] | "all"> = {
   settings: "all",
   sales: ["Manager", "Sales", "Accountant"],
   customers: ["Manager", "Sales", "Accountant"],
-  purchases: ["Manager", "Store Keeper", "Accountant"],
-  suppliers: ["Manager", "Store Keeper", "Accountant"],
+  // Not the Accountant. They see what is owed to suppliers under Finance;
+  // the supplier records and the bills behind them are the Manager's.
+  purchases: ["Manager", "Store Keeper"],
+  suppliers: ["Manager", "Store Keeper"],
   inventory: ["Manager", "Sales", "Store Keeper", "Accountant"],
   equipment: ["Manager", "Sales", "Store Keeper", "Biomedical Engineer"],
   maintenance: ["Manager", "Sales", "Biomedical Engineer"],

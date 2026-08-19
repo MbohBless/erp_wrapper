@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import Modal from "@/components/ui/Modal";
-import { type Role, ROLES, type User } from "@/lib/users";
+import { useAuth } from "@/lib/auth";
+import { type Role, ROLES, getAssignableRoles, type User } from "@/lib/users";
 
 const FIELD = "eq-field w-full px-4 py-3 text-[15px]";
 const LABEL = "block text-[13px] muted mb-2";
@@ -30,6 +32,20 @@ export default function UserDialog({
   onCancel: () => void;
 }) {
   const editing = !!initial;
+  const { token } = useAuth();
+  // Which roles this workspace actually hands out. A deployment can retire one
+  // it does not use, and offering it here would only produce a 422 on save.
+  // Falls back to the full set while the call is in flight, so the field is
+  // never empty.
+  const { data: assignable } = useQuery({
+    queryKey: ["assignable-roles"],
+    queryFn: () => getAssignableRoles(token as string),
+    enabled: !!token,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+  const roles = assignable ?? ROLES;
+
   const [form, setForm] = useState<UserFormValue>({
     email: initial?.email ?? "",
     full_name: initial?.full_name ?? "",
@@ -56,7 +72,12 @@ export default function UserDialog({
           <div>
             <label className={LABEL}>Role</label>
             <select className={FIELD} value={form.role} onChange={(e) => set("role", e.target.value as Role)}>
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+              {/* A user already holding a role this workspace has since retired
+                  still has to be editable, or their record becomes unopenable. */}
+              {!roles.includes(form.role) && (
+                <option value={form.role}>{form.role}</option>
+              )}
             </select>
           </div>
           <div>

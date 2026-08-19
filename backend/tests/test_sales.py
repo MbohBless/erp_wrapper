@@ -60,11 +60,15 @@ def test_sales_role_can_create(client, make_token, fake_erpnext):
     assert _create(client, token).status_code == 201
 
 
-def test_accountant_can_view_but_not_create(client, admin_token, make_token, fake_erpnext):
-    _create(client, admin_token)
+def test_accountant_conducts_sales_but_cannot_unwind_one(
+    client, admin_token, make_token, fake_erpnext
+):
     token = make_token("Accountant")
     assert client.get("/sales", headers=auth_header(token)).status_code == 200
-    assert _create(client, token).status_code == 403
+    created = _create(client, token)
+    assert created.status_code == 201, created.text
+    # Amending cancels a posted invoice and re-posts it; that stays with Manager.
+    assert _amend(client, token, created.json()["id"]).status_code == 403
 
 
 def test_store_keeper_cannot_view(client, make_token, fake_erpnext):

@@ -1,9 +1,13 @@
 """Purchase invoice endpoints with RBAC. Thin controllers — logic in PurchaseService.
 
 Access (Administrator always allowed):
-  - view (list/get):  Manager, Accountant, Store Keeper
+  - view (list/get):  Manager, Store Keeper
   - create:           Manager
   - amend (edit):     Manager
+
+The Accountant is deliberately absent. They can see what is owed — the payables
+ledger, the statements, the cash book — but purchases and suppliers are the
+Manager's to operate.
 """
 
 from fastapi import APIRouter, Depends, status
@@ -19,7 +23,7 @@ from services.purchase_service import PurchaseService
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
-can_view = require_roles(Role.MANAGER, Role.ACCOUNTANT, Role.STORE_KEEPER)
+can_view = require_roles(Role.MANAGER, Role.STORE_KEEPER)
 can_manage = require_roles(Role.MANAGER)
 can_amend = require_roles(Role.MANAGER)
 

@@ -15,7 +15,13 @@ from services.customer_service import CustomerService
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 can_view = require_roles(Role.MANAGER, Role.SALES, Role.ACCOUNTANT)
-can_manage = require_roles(Role.MANAGER, Role.SALES)
+# Whoever raises the invoices has to be able to add the buyer. Without it a
+# first-time customer stops the sale until a Manager is free.
+can_manage = require_roles(Role.MANAGER, Role.SALES, Role.ACCOUNTANT)
+# Deleting is not editing. A customer carries invoices and a ledger history, so
+# removing one stays with the roles that owned it before — otherwise "let the
+# accountant add a buyer" quietly also means "let them delete one".
+can_delete = require_roles(Role.MANAGER, Role.SALES)
 
 
 @router.get("", response_model=list[CustomerRead], dependencies=[Depends(can_view)])
@@ -68,7 +74,7 @@ async def update_customer(
 @router.delete(
     "/{customer_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(can_manage)],
+    dependencies=[Depends(can_delete)],
 )
 async def delete_customer(
     customer_id: str,

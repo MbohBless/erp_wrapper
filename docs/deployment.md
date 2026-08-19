@@ -78,6 +78,18 @@ Named volumes: `sites`, `logs`, `db-data`, `redis-cache-data`,
 | `REFRESH_TOKEN_EXPIRE_DAYS` | session lifetime (default 30) |
 | `LOG_LEVEL` / `LOG_FORMAT` | `INFO` / `json` (use `text` for local dev) |
 | `CADDYFILE` | `Caddyfile` (default) or `Caddyfile.saas` |
+| `DISABLED_ROLES` | roles this workspace does not hand out, e.g. `["Sales"]` |
+
+**`DISABLED_ROLES`** retires a role for *this deployment* without removing it
+from the product — one workspace having no sales reps is no reason for the next
+to lose the option. A retired role cannot be assigned (422 on user create and on
+update, not merely hidden in the dropdown), but keeps its permissions and its
+tests, so re-enabling it is an edit to this file rather than a restoration.
+Administrator is never retirable: a deployment that disabled it could lock
+itself out of its own user administration.
+
+Retiring a role does **not** change what the remaining roles may do. Who can
+reach what is the product's RBAC matrix, in [api.md](api.md).
 
 ### SaaS plane only
 

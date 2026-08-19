@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     brand_short_name: str = ""          # falls back to brand_app_name
     brand_tagline: str = "Distribution Suite"
 
+    # --- Roles -----------------------------------------------------------
+    # Roles this deployment does not use, by name — e.g. DISABLED_ROLES=Sales
+    # for a workspace whose accountant raises the invoices.
+    #
+    # A *deployment* setting rather than a code change, because the product is
+    # multi-tenant: one workspace having no sales reps is no reason for the next
+    # one to lose the option. Disabled means "cannot be assigned to anyone"; the
+    # role keeps its permissions and its tests, so re-enabling it is a config
+    # edit rather than a restoration.
+    disabled_roles: list[str] = []
+
     # --- Tenancy ---------------------------------------------------------
     # "single": self-hosted / dedicated instance. One implicit tenant, no
     #           control plane, ERPNext coordinates come from this file.

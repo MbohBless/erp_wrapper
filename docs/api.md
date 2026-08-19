@@ -158,6 +158,14 @@ route this prefix through the public proxy.** Unset token = every call refused.
 
 ## Users  `/api/users`  — *Administrator only*
 
+`GET /users/roles` returns the roles **this deployment** hands out. That is not
+the same as every role the product defines: `DISABLED_ROLES` (see
+[deployment.md](deployment.md)) retires one a workspace does not use, and
+assigning a retired role is refused with 422 on create *and* on update. The role
+keeps its permissions and its tests, so re-enabling it is a config edit rather
+than a restoration. Administrator can never be retired — a deployment that
+disabled it could lock itself out of its own user administration.
+
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/users` | list (Administrator) |
@@ -235,7 +243,7 @@ Movement body: `{ warehouse, items: [{ item_code, qty, batch_no?, rate? }] }`.
 
 ## Sales  `/api/sales`  → ERPNext `Sales Invoice`
 
-- **view:** Manager, Sales, Accountant · **create:** Manager, Sales ·
+- **view:** Manager, Sales, Accountant · **create:** Manager, Sales, Accountant ·
   **amend (edit a posted invoice):** Manager
 
 | Method | Path | Notes |
@@ -303,8 +311,13 @@ ERPNext has no in-place update for a submitted document, so `PUT /sales/{id}`
 
 ## Purchases  `/api/purchases`  → ERPNext `Purchase Invoice`
 
-- **view:** Manager, Accountant, Store Keeper · **create:** Manager ·
+- **view:** Manager, Store Keeper · **create:** Manager ·
   **amend (edit a posted bill):** Manager
+
+The Accountant is deliberately absent from purchases and suppliers. They see
+what is owed through Finance — the payables ledger, cash book and statements —
+but operating supplier records and their bills belongs to the Manager, and
+`POST /payments/pay` follows the same line.
 
 | Method | Path | Notes |
 | --- | --- | --- |

@@ -85,6 +85,11 @@ in `/docs` (and the README if the index changes) in the same change.**
 Administrator, Manager, Sales, Store Keeper, Accountant, Biomedical Engineer.
 See the RBAC matrix in [docs/api.md](docs/api.md).
 
+A deployment may **retire** a role it does not use via `DISABLED_ROLES` — the
+role can no longer be assigned, but keeps its permissions and its tests. Do not
+delete a role from `Role` because one workspace has no use for it: the product
+is multi-tenant, and the next workspace may want it.
+
 ## Commands
 
 ```bash

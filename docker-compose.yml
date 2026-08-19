@@ -215,6 +215,11 @@ services:
       ERPNEXT_API_KEY: ${ERPNEXT_API_KEY:-}
       ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET:-}
       CORS_ORIGINS: '["*"]'
+      # Roles this workspace does not hand out, as a JSON list — e.g.
+      # DISABLED_ROLES=["Sales"]. The service does not read .env directly, so a
+      # setting absent from here reaches the app as its default and the .env
+      # line does nothing at all.
+      DISABLED_ROLES: '${DISABLED_ROLES:-[]}'
       # --- Tenancy ---
       # In "single" the app serves one implicit tenant and never contacts the
       # control plane; in "multi" it resolves the tenant per request from Host.

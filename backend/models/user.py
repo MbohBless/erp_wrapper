@@ -19,6 +19,22 @@ class Role(str, Enum):
     BIOMEDICAL_ENGINEER = "Biomedical Engineer"
 
 
+def assignable_roles() -> list[Role]:
+    """The roles this deployment will hand out.
+
+    Everything in `Role` minus whatever DISABLED_ROLES names. Administrator is
+    never removable — a deployment that could disable it could lock itself out
+    of its own user administration with no way back in.
+    """
+    from config import get_settings
+
+    disabled = {r.strip().casefold() for r in get_settings().disabled_roles if r.strip()}
+    return [
+        r for r in Role
+        if r is Role.ADMINISTRATOR or r.value.casefold() not in disabled
+    ]
+
+
 class User(Base, TenantScoped):
     __tablename__ = "users"
     # Email is unique *within* a tenant, not globally: two customers may each

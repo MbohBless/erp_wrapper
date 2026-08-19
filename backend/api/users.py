@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.deps import get_current_user, get_user_service, require_roles
-from models.user import Role, User
+from models.user import Role, User, assignable_roles
 from schemas.user import UserCreate, UserRead, UserUpdate
 from services.user_service import UserService
 
@@ -34,6 +34,20 @@ def create_user(
     service: UserService = Depends(get_user_service),
 ) -> User:
     return service.create(data)
+
+
+@router.get(
+    "/roles",
+    response_model=list[str],
+    dependencies=[Depends(require_roles(Role.ADMINISTRATOR))],
+)
+def list_assignable_roles() -> list[str]:
+    """Roles this deployment will hand out, for the user form to offer.
+
+    Declared before `/{user_id}` so "roles" is read as this route rather than
+    as a user id.
+    """
+    return [r.value for r in assignable_roles()]
 
 
 @router.get("/{user_id}", response_model=UserRead)
