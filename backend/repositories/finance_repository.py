@@ -44,7 +44,9 @@ def _bucket(age: int) -> str:
         return "31-60"
     if age <= 90:
         return "61-90"
-    return "90+"
+    if age <= 120:
+        return "91-120"
+    return "120+"
 
 
 log = logging.getLogger("equimed.finance")
@@ -155,7 +157,7 @@ class FinanceRepository:
         rows: list[LedgerRow] = []
         totals = AgingBuckets()
         field_map = {"Current": "current", "1-30": "d30", "31-60": "d60",
-                     "61-90": "d90", "90+": "older"}
+                     "61-90": "d90", "91-120": "d120", "120+": "older"}
         for d in docs:
             outstanding = _num(d.get("outstanding_amount"))
             ref_date = _parse(d.get("due_date")) or _parse(d.get("posting_date"))

@@ -48,3 +48,13 @@ export const completeTicket = (
   id: string,
   body: { parts_used?: string | null; signed?: boolean } = {}
 ) => api.post<Ticket>(token, `/maintenance/${encodeId(id)}/complete`, body);
+
+/**
+ * One record, by id.
+ *
+ * The edit pages used to fetch a page of the list and search it, which works
+ * only while everything fits on one page — past that the record is absent and
+ * the form waits forever for something that will never arrive.
+ */
+export const getTicket = (token: string, id: string) =>
+  api.get<Ticket>(token, `/maintenance/${encodeId(id)}`);

@@ -45,3 +45,13 @@ export const installEquipment = (
   id: string,
   body: { customer?: string | null; installation_date?: string | null } = {}
 ) => api.post<Equipment>(token, `/equipment/${encodeId(id)}/install`, body);
+
+/**
+ * One record, by id.
+ *
+ * The edit pages used to fetch a page of the list and search it, which works
+ * only while everything fits on one page — past that the record is absent and
+ * the form waits forever for something that will never arrive.
+ */
+export const getEquipment = (token: string, id: string) =>
+  api.get<Equipment>(token, `/equipment/${encodeId(id)}`);

@@ -17,7 +17,7 @@ export default function EditBillPage() {
 
   // By id, not from the list: list queries omit child tables, so a list row
   // carries no line items.
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["purchase", id],
     queryFn: () => getPurchase(token as string, id),
     enabled: !!token,
@@ -29,7 +29,7 @@ export default function EditBillPage() {
         <BillForm amending={data} />
       ) : (
         <div className="eq-view muted">
-          {isLoading ? t("common.loading") : error ? t("purchases.loadError") : null}
+          {isLoading ? t("common.loading") : t("common.recordNotFound")}
         </div>
       )}
     </AppShell>

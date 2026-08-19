@@ -34,18 +34,24 @@ async def test_receivable_ledger_aging():
         "Sales Invoice": [
             {"name": "SI-1", "customer": "A", "posting_date": "2026-09-20", "due_date": "2026-09-30", "grand_total": 1000, "outstanding_amount": 1000},  # current
             {"name": "SI-2", "customer": "B", "posting_date": "2026-08-01", "due_date": "2026-09-10", "grand_total": 500, "outstanding_amount": 500},   # 14 days -> 1-30
-            {"name": "SI-3", "customer": "C", "posting_date": "2026-06-01", "due_date": "2026-06-15", "grand_total": 800, "outstanding_amount": 800},   # 100 days -> 90+
+            {"name": "SI-3", "customer": "C", "posting_date": "2026-06-01", "due_date": "2026-06-15", "grand_total": 800, "outstanding_amount": 800},   # 101 days -> 91-120
+            {"name": "SI-4", "customer": "D", "posting_date": "2026-01-02", "due_date": "2026-01-10", "grand_total": 700, "outstanding_amount": 700},   # 257 days -> 120+
         ]
     }
     repo = FinanceRepository(FinStub(data))
     led = await repo.receivable_ledger(AS_OF)
-    assert len(led.rows) == 3
+    assert len(led.rows) == 4
     assert led.totals.current == 1000
     assert led.totals.d30 == 500
-    assert led.totals.older == 800
-    assert led.totals.total == 2300
+    # Four months late and eight months late are different debts. Folded into
+    # one bucket running from 90 to forever, collections had nothing to sort on.
+    assert led.totals.d120 == 800
+    assert led.totals.older == 700
+    assert led.totals.total == 3000
     buckets = {r.reference: r.bucket for r in led.rows}
-    assert buckets["SI-1"] == "Current" and buckets["SI-3"] == "90+"
+    assert buckets["SI-1"] == "Current"
+    assert buckets["SI-3"] == "91-120"
+    assert buckets["SI-4"] == "120+"
 
 
 async def test_bank_book_running_balance():

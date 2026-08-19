@@ -18,7 +18,7 @@ export default function EditInvoicePage() {
   // Fetched by id, not taken from the list: an ERPNext list query cannot
   // return child tables, so a list row has no line items — and a correction
   // seeded from one would re-post the invoice with nothing on it.
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["sale", id],
     queryFn: () => getSale(token as string, id),
     enabled: !!token,
@@ -30,7 +30,7 @@ export default function EditInvoicePage() {
         <InvoiceForm amending={data} />
       ) : (
         <div className="eq-view muted">
-          {isLoading ? t("common.loading") : error ? t("sales.loadError") : null}
+          {isLoading ? t("common.loading") : t("common.recordNotFound")}
         </div>
       )}
     </AppShell>

@@ -186,7 +186,8 @@ function LedgerTab({ token, kind, onAuthError }: { token: string | null; kind: "
   const party = kind === "receivable" ? t("finance.party.customer") : t("finance.party.supplier");
   const buckets: [string, number][] = [
     [t("finance.bucket.current"), d.totals.current], ["1-30", d.totals.d30], ["31-60", d.totals.d60],
-    ["61-90", d.totals.d90], ["90+", d.totals.older], [t("finance.bucket.total"), d.totals.total],
+    ["61-90", d.totals.d90], ["91-120", d.totals.d120], ["120+", d.totals.older],
+    [t("finance.bucket.total"), d.totals.total],
   ];
   return (
     <>
@@ -230,7 +231,11 @@ function LedgerTab({ token, kind, onAuthError }: { token: string | null; kind: "
 
 function Bucket({ b }: { b: string }) {
   const { t } = useI18n();
-  const cls = b === "Current" ? "text-ok" : b === "90+" ? "text-err" : b === "61-90" ? "text-warn" : "muted";
+  const cls =
+    b === "Current" ? "text-ok"
+    : b === "120+" ? "text-err"
+    : b === "91-120" || b === "61-90" ? "text-warn"
+    : "muted";
   const label = b === "Current" ? t("finance.bucket.current") : b;
   return <span className={`text-[13px] ${cls}`}>{label}</span>;
 }

@@ -42,3 +42,13 @@ export const updateSupplier = (token: string, id: string, input: SupplierInput) 
 
 export const deleteSupplier = (token: string, id: string) =>
   api.del(token, `/suppliers/${encodeId(id)}`);
+
+/**
+ * One record, by id.
+ *
+ * The edit pages used to fetch a page of the list and search it, which works
+ * only while everything fits on one page — past that the record is absent and
+ * the form waits forever for something that will never arrive.
+ */
+export const getSupplier = (token: string, id: string) =>
+  api.get<Supplier>(token, `/suppliers/${encodeId(id)}`);

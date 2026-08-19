@@ -25,6 +25,10 @@ export type AgingBuckets = {
   d30: number;
   d60: number;
   d90: number;
+  /** 91-120 days overdue. Split out of `older`, which used to run from 90 to
+   *  forever and so could not tell a debt four months late from one a year
+   *  late. The boundary matches ERPNext's own ageing. */
+  d120: number;
   older: number;
   total: number;
 };
