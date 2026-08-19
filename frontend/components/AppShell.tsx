@@ -11,6 +11,9 @@ import { useAuth } from "@/lib/auth";
 export default function AppShell({ children }: { children: ReactNode }) {
   const { token, ready, user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  // Separate from `collapsed`: on a phone the sidebar is a slide-over, and
+  // collapsing a 280px column to 80px is meaningless there.
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   if (!ready)
     return (
@@ -22,15 +25,30 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen w-full bg-bg text-ink">
-      <Sidebar collapsed={collapsed} user={user} onLogout={logout} />
+      <Sidebar
+        collapsed={collapsed}
+        user={user}
+        onLogout={logout}
+        mobileOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+      />
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 z-40 bg-black/40"
+        />
+      )}
       <div className="flex-1 min-w-0 h-full flex flex-col">
         <TopBar
           user={user}
           onToggleCollapse={() => setCollapsed((v) => !v)}
+          onOpenNav={() => setMobileOpen(true)}
           onLogout={logout}
         />
         <main className="flex-1 overflow-y-auto eq-scroll bg-bg">
-          <div className="max-w-content mx-auto px-6 md:px-8 py-7 pb-16">
+          <div className="max-w-content mx-auto px-4 md:px-8 py-5 md:py-7 pb-16">
             {children}
           </div>
         </main>

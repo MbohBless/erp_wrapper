@@ -17,6 +17,7 @@ _FIELD_MAP: dict[str, str] = {
     "sku": "item_code",
     "category": "item_group",
     "unit": "stock_uom",
+    "track_batches": "has_batch_no",
     "image": "image",
     "disabled": "disabled",
     "barcode": "custom_barcode",
@@ -29,7 +30,7 @@ _READ_FIELDS = ["name", *_FIELD_MAP.values()]
 
 
 def _to_erpnext(data: dict) -> dict:
-    return to_erpnext(data, _FIELD_MAP, bool_fields=("disabled",))
+    return to_erpnext(data, _FIELD_MAP, bool_fields=("disabled", "track_batches"))
 
 
 def _from_erpnext(doc: dict) -> ProductRead:
@@ -39,6 +40,7 @@ def _from_erpnext(doc: dict) -> ProductRead:
         sku=doc.get("item_code") or doc.get("name"),
         category=doc.get("item_group") or "All Item Groups",
         unit=doc.get("stock_uom") or "Nos",
+        track_batches=bool(doc.get("has_batch_no")),
         image=doc.get("image") or None,
         barcode=doc.get("custom_barcode") or None,
         manufacturer=doc.get("custom_manufacturer") or None,
@@ -58,6 +60,7 @@ class ProductRepository:
         self,
         search: str | None = None,
         category: str | None = None,
+        disabled: bool | None = None,
         limit: int = 20,
         start: int = 0,
     ) -> list[ProductRead]:
@@ -66,6 +69,11 @@ class ProductRepository:
             filters.append(["item_name", "like", f"%{search}%"])
         if category:
             filters.append(["item_group", "=", category])
+        # Applied by ERPNext, not after the fact. Filtering the fetched page
+        # here would only ever filter the page in front of the user and
+        # silently hide every match on the others.
+        if disabled is not None:
+            filters.append(["disabled", "=", 1 if disabled else 0])
         docs = await self.client.list_documents(
             self.DOCTYPE,
             fields=_READ_FIELDS,

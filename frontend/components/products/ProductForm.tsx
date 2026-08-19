@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import DocFormShell, { DOC_FIELD, DOC_GRID, DOC_LABEL } from "@/components/ui/DocFormShell";
+import { groupNum } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useReferenceOptions } from "@/lib/reference";
 import {
   type Product,
   type ProductInput,
@@ -24,11 +26,12 @@ type FormState = {
   purchase_price: string;
   selling_price: string;
   image: string;
+  track_batches: boolean;
   disabled: boolean;
 };
 
 const num = (s: string): number | null => {
-  const n = parseFloat(s);
+  const n = parseFloat(s.replace(/[^\d.-]/g, ""));
   return s.trim() === "" || Number.isNaN(n) ? null : n;
 };
 
@@ -36,6 +39,7 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
   const editing = !!initial;
   const { token } = useAuth();
   const { t } = useI18n();
+  const { options } = useReferenceOptions();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -44,13 +48,16 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
   const [form, setForm] = useState<FormState>({
     name: initial?.name ?? "",
     sku: initial?.sku ?? "",
-    category: initial?.category ?? "All Item Groups",
+    // Empty, not the tree root: "All Item Groups" is the container, not a
+    // category, and 12 items were filed under it because the form offered it.
+    category: initial?.category ?? "",
     unit: initial?.unit ?? "Nos",
     manufacturer: initial?.manufacturer ?? "",
     barcode: initial?.barcode ?? "",
-    purchase_price: initial?.purchase_price?.toString() ?? "",
-    selling_price: initial?.selling_price?.toString() ?? "",
+    purchase_price: initial?.purchase_price != null ? groupNum(String(initial.purchase_price)) : "",
+    selling_price: initial?.selling_price != null ? groupNum(String(initial.selling_price)) : "",
     image: initial?.image ?? "",
+    track_batches: initial?.track_batches ?? false,
     disabled: initial?.disabled ?? false,
   });
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
@@ -68,6 +75,13 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
 
   function onSave() {
     setError(null);
+    // Required from now on. Every new item gets a category so the catalogue
+    // stays filterable — the 12 items already on the tree root are what
+    // happens when it is optional.
+    if (!form.category) {
+      setError(t("products.error.categoryRequired"));
+      return;
+    }
     save.mutate({
       name: form.name,
       sku: form.sku,
@@ -78,6 +92,7 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
       purchase_price: num(form.purchase_price),
       selling_price: num(form.selling_price),
       image: form.image || null,
+      track_batches: form.track_batches,
       disabled: form.disabled,
     });
   }
@@ -124,18 +139,30 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             />
           </div>
           <div>
-            <label className={DOC_LABEL}>{t("products.category")}</label>
-            <input className={DOC_FIELD} value={form.category} onChange={(e) => set("category", e.target.value)} />
+            <label className={DOC_LABEL}>{t("products.category")} *</label>
+            {/* A select, not free text. Typed categories drift — "Consumable",
+                "consumables", "Consumable " — and then nothing can group by
+                them. The options come from ERPNext, so adding a category is a
+                change there, not a deploy. */}
+            <select
+              className={DOC_FIELD}
+              value={form.category}
+              onChange={(e) => set("category", e.target.value)}
+              required
+            >
+              <option value="">{t("common.choose")}</option>
+              {(options?.item_groups ?? []).map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={DOC_LABEL}>{t("products.sellingPriceXaf")}</label>
             <input
               className={DOC_FIELD}
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="numeric"
               value={form.selling_price}
-              onChange={(e) => set("selling_price", e.target.value)}
+              onChange={(e) => set("selling_price", groupNum(e.target.value))}
             />
           </div>
         </div>
@@ -151,11 +178,9 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             <label className={DOC_LABEL}>{t("products.purchasePriceXaf")}</label>
             <input
               className={DOC_FIELD}
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="numeric"
               value={form.purchase_price}
-              onChange={(e) => set("purchase_price", e.target.value)}
+              onChange={(e) => set("purchase_price", groupNum(e.target.value))}
             />
           </div>
           <div>
@@ -170,6 +195,21 @@ export default function ProductForm({ initial }: { initial?: Product | null }) {
             <label className={DOC_LABEL}>{t("products.imageUrl")}</label>
             <input className={DOC_FIELD} value={form.image} onChange={(e) => set("image", e.target.value)} />
           </div>
+          <label className="md:col-span-2 flex items-start gap-2.5 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.track_batches}
+              // ERPNext will not let this be turned on once the item has stock
+              // movements, so it is effectively a decision made at creation.
+              disabled={editing && (initial?.track_batches ?? false)}
+              onChange={(e) => set("track_batches", e.target.checked)}
+            />
+            <span>
+              {t("products.trackBatches")}
+              <span className="block text-[12px] muted">{t("products.trackBatchesHint")}</span>
+            </span>
+          </label>
           <label className="md:col-span-2 flex items-center gap-2.5 text-sm cursor-pointer">
             <input type="checkbox" checked={form.disabled} onChange={(e) => set("disabled", e.target.checked)} />
             {t("products.disabledHint")}

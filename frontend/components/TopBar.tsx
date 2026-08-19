@@ -9,10 +9,12 @@ import { useTheme } from "@/lib/theme";
 export default function TopBar({
   user,
   onToggleCollapse,
+  onOpenNav,
   onLogout,
 }: {
   user: string | null;
   onToggleCollapse: () => void;
+  onOpenNav: () => void;
   onLogout: () => void;
 }) {
   const { theme, toggle } = useTheme();
@@ -22,12 +24,23 @@ export default function TopBar({
   const initials = (user ?? "AM").slice(0, 2).toUpperCase();
 
   return (
-    <header className="h-[72px] shrink-0 flex items-center gap-4 px-6 border-b border-divider bg-bg relative z-20">
+    <header className="h-[72px] shrink-0 flex items-center gap-2 md:gap-4 px-3 md:px-6 border-b border-divider bg-bg relative z-20">
+      {/* Two buttons rather than one branching on viewport width: the mobile
+          sidebar is a slide-over and the desktop one collapses, so the same
+          control means different things. */}
+      <button
+        type="button"
+        onClick={onOpenNav}
+        aria-label="Open navigation"
+        className="md:hidden icobtn grid place-items-center w-9 h-9 shrink-0 border border-divider muted"
+      >
+        <Icon name="menu" size={17} />
+      </button>
       <button
         type="button"
         onClick={onToggleCollapse}
         title="Toggle sidebar"
-        className="icobtn grid place-items-center w-9 h-9 shrink-0 border border-divider muted"
+        className="hidden md:grid icobtn place-items-center w-9 h-9 shrink-0 border border-divider muted"
       >
         <Icon name="menu" size={17} />
       </button>
@@ -37,10 +50,10 @@ export default function TopBar({
           <Icon name="search" size={16} />
         </span>
         <input
-          className="eq-field w-full h-10 pl-9 pr-14 text-sm"
+          className="eq-field w-full h-10 pl-9 pr-3 md:pr-14 text-sm"
           placeholder={t("topbar.search")}
         />
-        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] muted-2 border border-divider px-1.5 rounded">
+        <kbd className="hidden md:block absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] muted-2 border border-divider px-1.5 rounded">
           ⌘K
         </kbd>
       </div>
@@ -58,7 +71,8 @@ export default function TopBar({
             className="icobtn relative grid place-items-center w-[38px] h-[38px] border border-divider muted"
           >
             <Icon name="bell" size={18} />
-            <span className="absolute top-[7px] right-2 w-[7px] h-[7px] rounded-full border-[1.5px] border-bg bg-err" />
+            {/* No unread badge: there is no notification source yet, and a
+                permanent red dot trains people to ignore it. */}
           </button>
           {notifOpen && (
             <div className="absolute top-[46px] right-0 w-[340px] bg-bg rounded-card border border-divider shadow-[var(--shadow-lg)] z-40 overflow-hidden">
@@ -66,30 +80,13 @@ export default function TopBar({
                 <span className="font-heading font-semibold text-[15px]">
                   Notifications
                 </span>
-                <span className="text-[11px] text-accent cursor-pointer">
-                  Mark all read
-                </span>
               </div>
-              {[
-                ["Batch MET-7781 (Metformin) expires in 34 days.", "2h ago · Inventory", true],
-                ["CHU Yaoundé paid invoice INV-2041 — 5.6M XAF.", "4h ago · Finance", true],
-                ["Insulin Glargine dropped below reorder point.", "Yesterday · Stock", false],
-              ].map(([msg, meta, unread], i) => (
-                <div
-                  key={i}
-                  className="flex gap-3 px-4 py-3 border-b border-solid divide-soft"
-                >
-                  <span
-                    className={`w-[7px] h-[7px] mt-1.5 shrink-0 rounded-full ${
-                      unread ? "bg-accent" : "border border-divider"
-                    }`}
-                  />
-                  <div>
-                    <div className="text-[13px]">{msg}</div>
-                    <div className="text-[11px] muted mt-0.5">{meta}</div>
-                  </div>
-                </div>
-              ))}
+              {/* There is no notification backend yet. This used to render three
+                  invented alerts with fake timestamps, which is indistinguishable
+                  from real activity to someone looking at their own workspace. */}
+              <div className="px-4 py-10 text-center muted-2 text-[13px]">
+                No notifications yet.
+              </div>
             </div>
           )}
         </div>

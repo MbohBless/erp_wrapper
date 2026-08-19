@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import Modal from "@/components/ui/Modal";
-import { xaf } from "@/lib/api";
+import { groupNum, parseNum, xaf } from "@/lib/api";
 import { MODES } from "@/lib/payments";
 
 const FIELD = "eq-field w-full px-4 py-3 text-[15px]";
@@ -36,7 +36,7 @@ export default function PaymentDialog({
   onCancel: () => void;
 }) {
   const receiving = mode === "receive";
-  const [amount, setAmount] = useState(outstanding ? String(outstanding) : "");
+  const [amount, setAmount] = useState(outstanding ? groupNum(String(outstanding)) : "");
   const [modeOfPayment, setModeOfPayment] = useState("");
   const [postingDate, setPostingDate] = useState("");
   const [referenceNo, setReferenceNo] = useState("");
@@ -47,7 +47,7 @@ export default function PaymentDialog({
         className="p-6"
         onSubmit={(e) => {
           e.preventDefault();
-          const n = parseFloat(amount);
+          const n = parseNum(amount);
           onSubmit({
             amount: Number.isNaN(n) ? null : n,
             mode_of_payment: modeOfPayment || null,
@@ -75,12 +75,10 @@ export default function PaymentDialog({
           <div>
             <label className={LABEL}>Amount (XAF) *</label>
             <input
-              className={FIELD}
-              type="number"
-              min="0.01"
-              step="any"
+              className={`${FIELD} num text-right`}
+              inputMode="numeric"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(groupNum(e.target.value))}
               required
             />
           </div>

@@ -19,14 +19,15 @@ def test_password_hash_roundtrip():
 
 
 def test_access_token_roundtrip():
-    token = create_access_token(subject="42", role="Administrator")
+    token = create_access_token(subject="42", role="Administrator", tenant_id="acme")
     payload = decode_access_token(token)
     assert payload["sub"] == "42"
     assert payload["role"] == "Administrator"
+    assert payload["tid"] == "acme"
 
 
 def test_invalid_token_rejected():
-    bad = create_access_token(subject="1", role="Sales") + "tampered"
+    bad = create_access_token(subject="1", role="Sales", tenant_id="acme") + "tampered"
     try:
         decode_access_token(bad)
         assert False, "expected an invalid-token error"
@@ -35,7 +36,7 @@ def test_invalid_token_rejected():
 
 
 def test_token_signed_with_configured_secret():
-    token = create_access_token(subject="1", role="Sales")
+    token = create_access_token(subject="1", role="Sales", tenant_id="acme")
     # Decoding with the configured secret works...
     assert decode_access_token(token)["sub"] == "1"
     # ...and a different secret fails.

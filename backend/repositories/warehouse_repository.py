@@ -33,9 +33,16 @@ class WarehouseRepository:
     def __init__(self, client: ERPNextClient) -> None:
         self.client = client
 
-    async def list(self, limit: int = 50, start: int = 0) -> list[WarehouseRead]:
+    async def list(
+        self, limit: int = 50, start: int = 0, include_disabled: bool = False
+    ) -> list[WarehouseRead]:
+        # A disabled warehouse is one someone deliberately retired. Offering it
+        # invites stock into a location the next person will not think to look
+        # in, and ERPNext refuses it on a transaction anyway.
+        filters = None if include_disabled else [["disabled", "=", 0]]
         docs = await self.client.list_documents(
-            self.DOCTYPE, fields=_READ_FIELDS, limit=limit, start=start
+            self.DOCTYPE, fields=_READ_FIELDS, filters=filters,
+            limit=limit, start=start
         )
         return [_from_erpnext(doc) for doc in docs]
 

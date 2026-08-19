@@ -32,6 +32,34 @@ class FakeERPNextClient:
             if op == "=":
                 if dv != val:
                     return False
+            elif op == "!=":
+                if dv == val:
+                    return False
+            elif op == "in":
+                if dv not in (val or []):
+                    return False
+            elif op in (">", "<", ">=", "<="):
+                # Comparisons were previously ignored, which quietly made the
+                # fake *more* permissive than ERPNext: a filter like
+                # ["outstanding_amount", ">", 0] matched every row, so a settled
+                # invoice came back where the real thing excludes it — and any
+                # test relying on that filter proved nothing.
+                try:
+                    left, right = float(dv or 0), float(val or 0)
+                except (TypeError, ValueError):
+                    # Dates arrive as ISO strings. Comparing them lexically is
+                    # not a shortcut — it is why ERPNext can filter on them at
+                    # all — but coercing them to float is not, and treating the
+                    # failure as "no match" quietly drops every dated filter.
+                    left, right = str(dv or ""), str(val or "")
+                if op == ">" and not left > right:
+                    return False
+                if op == "<" and not left < right:
+                    return False
+                if op == ">=" and not left >= right:
+                    return False
+                if op == "<=" and not left <= right:
+                    return False
             elif op == "like":
                 needle = str(val).strip("%").lower()
                 if needle not in str(dv or "").lower():
@@ -41,7 +69,16 @@ class FakeERPNextClient:
     async def list_documents(
         self, doctype, fields=None, filters=None, limit=20, start=0, order_by=None
     ):
-        docs = [d for d in self.store.values() if self._matches(d, filters)]
+        # Filter by doctype. Without this the fake returns every document
+        # regardless of type, so a repository that creates a supporting record
+        # of another DocType silently corrupts an unrelated listing — and a
+        # test suite that cannot tell two DocTypes apart cannot catch a
+        # repository writing to the wrong one.
+        docs = [
+            d
+            for d in self.store.values()
+            if d.get("doctype") in (doctype, None) and self._matches(d, filters)
+        ]
         return docs[start : start + limit]
 
     async def get_document(self, doctype, name):
@@ -50,7 +87,18 @@ class FakeERPNextClient:
         return self.store[name]
 
     async def create_document(self, doctype, data):
-        name = next((data[f] for f in _NAME_FIELDS if data.get(f)), None)
+        # An amendment is named after the document it replaces: ERPNext appends
+        # a counter, so ACC-SINV-2026-00007 becomes ACC-SINV-2026-00007-1. The
+        # id changing is the part callers get wrong, so the fake reproduces it
+        # rather than handing back an unrelated autoname.
+        original = data.get("amended_from")
+        if original:
+            n = 1
+            while f"{original}-{n}" in self.store:
+                n += 1
+            name = f"{original}-{n}"
+        else:
+            name = next((data[f] for f in _NAME_FIELDS if data.get(f)), None)
         if not name:
             # Autoname series (e.g. Stock Entry) — generate a deterministic id.
             name = f"{doctype}-{next(self._seq)}"
@@ -74,6 +122,18 @@ class FakeERPNextClient:
             raise ERPNextNotFound(f"{doctype} {name} not found")
         self.store[name]["docstatus"] = 1
         return self.store[name]
+
+    async def cancel_document(self, doctype, name):
+        if name not in self.store:
+            raise ERPNextNotFound(f"{doctype} {name} not found")
+        doc = self.store[name]
+        doc["docstatus"] = 2
+        doc["status"] = "Cancelled"
+        # ERPNext zeroes the outstanding amount when it reverses a document.
+        # Without this the fake would let a guard that reads "how much has been
+        # settled?" pass on a cancelled invoice where the real one refuses.
+        doc["outstanding_amount"] = 0
+        return doc
 
     async def run_report(self, report_name, filters=None):
         # Record the call so tests can assert report name + filters.

@@ -23,11 +23,12 @@ can_manage = require_roles(Role.MANAGER)
 async def list_products(
     search: str | None = None,
     category: str | None = None,
+    disabled: bool | None = None,
     limit: int = 20,
     start: int = 0,
     service: ProductService = Depends(get_product_service),
 ) -> list[ProductRead]:
-    return await service.list(search, category, limit, start)
+    return await service.list(search, category, disabled, limit, start)
 
 
 @router.post(

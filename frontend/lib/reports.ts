@@ -3,14 +3,13 @@
 export type ReportKey =
   | "income-statement"
   | "balance-sheet"
-  | "compte-de-resultat"
-  | "bilan"
-  | "flux-de-tresorerie"
-  | "etat-annexe"
+  | "trial-balance"
+  | "cash-flow"
   | "receivables"
   | "payables"
   | "current-stock"
-  | "low-stock";
+  | "low-stock"
+  | "dashboard";
 
 export type ReportParams = {
   company?: string;

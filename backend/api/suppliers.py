@@ -14,7 +14,10 @@ from services.supplier_service import SupplierService
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
-can_view = require_roles(Role.MANAGER, Role.ACCOUNTANT, Role.STORE_KEEPER)
+# Not the Accountant. They see what is owed to suppliers in Finance — the
+# payables ledger and the statements — but the supplier records and the
+# bills behind them are the Manager's to operate.
+can_view = require_roles(Role.MANAGER, Role.STORE_KEEPER)
 can_manage = require_roles(Role.MANAGER)
 
 
@@ -23,11 +26,12 @@ async def list_suppliers(
     search: str | None = None,
     supplier_type: str | None = None,
     group: str | None = None,
+    disabled: bool | None = None,
     limit: int = 20,
     start: int = 0,
     service: SupplierService = Depends(get_supplier_service),
 ) -> list[SupplierRead]:
-    return await service.list(search, supplier_type, group, limit, start)
+    return await service.list(search, supplier_type, group, disabled, limit, start)
 
 
 @router.post(

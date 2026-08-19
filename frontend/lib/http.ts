@@ -1,7 +1,19 @@
 // Shared HTTP layer for all API calls: auth headers, query building, error
 // handling and JSON parsing in one place.
 
+import { getAccessToken, refreshAccessToken } from "@/lib/session";
+
 export class UnauthorizedError extends Error {}
+
+/**
+ * Server-side paging, as every list endpoint takes it.
+ *
+ * Omitting these is not "give me everything" — it is a default page size, and
+ * anything past it is simply absent with nothing to say so. A list page should
+ * always pass them; only the form pickers, which need a whole short list, rely
+ * on the default.
+ */
+export type Paged = { limit?: number; start?: number };
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
@@ -32,31 +44,63 @@ const jsonHeaders = (token: string) => ({
   "Content-Type": "application/json",
 });
 
+/**
+ * Send the request; on a 401, renew the session once and send it again.
+ *
+ * Callers pass the token they were rendered with, which is exactly the one that
+ * just expired — so the retry deliberately uses the freshly minted token rather
+ * than the argument. The refresh itself is single-flighted in lib/session, so a
+ * page issuing ten parallel requests renews once, not ten times.
+ *
+ * Only one retry. If the second attempt is also refused the session is
+ * genuinely over, and looping would just delay saying so.
+ */
+async function send<T>(
+  attempt: (token: string) => Promise<Response>,
+  token: string
+): Promise<T> {
+  let res = await attempt(token);
+  if (res.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) res = await attempt(fresh);
+  }
+  return parse<T>(res);
+}
+
 export const api = {
   get<T>(token: string, path: string, params?: QueryParams): Promise<T> {
-    return fetch(`/api${path}${buildQuery(params)}`, {
-      headers: authHeader(token),
-    }).then((r) => parse<T>(r));
+    return send<T>(
+      (t) => fetch(`/api${path}${buildQuery(params)}`, { headers: authHeader(t) }),
+      token || getAccessToken() || ""
+    );
   },
   post<T>(token: string, path: string, body: unknown): Promise<T> {
-    return fetch(`/api${path}`, {
-      method: "POST",
-      headers: jsonHeaders(token),
-      body: JSON.stringify(body),
-    }).then((r) => parse<T>(r));
+    return send<T>(
+      (t) =>
+        fetch(`/api${path}`, {
+          method: "POST",
+          headers: jsonHeaders(t),
+          body: JSON.stringify(body),
+        }),
+      token || getAccessToken() || ""
+    );
   },
   put<T>(token: string, path: string, body: unknown): Promise<T> {
-    return fetch(`/api${path}`, {
-      method: "PUT",
-      headers: jsonHeaders(token),
-      body: JSON.stringify(body),
-    }).then((r) => parse<T>(r));
+    return send<T>(
+      (t) =>
+        fetch(`/api${path}`, {
+          method: "PUT",
+          headers: jsonHeaders(t),
+          body: JSON.stringify(body),
+        }),
+      token || getAccessToken() || ""
+    );
   },
   del(token: string, path: string): Promise<void> {
-    return fetch(`/api${path}`, {
-      method: "DELETE",
-      headers: authHeader(token),
-    }).then((r) => parse<void>(r));
+    return send<void>(
+      (t) => fetch(`/api${path}`, { method: "DELETE", headers: authHeader(t) }),
+      token || getAccessToken() || ""
+    );
   },
 };
 

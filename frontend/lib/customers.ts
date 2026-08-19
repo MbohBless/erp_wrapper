@@ -1,4 +1,4 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type CustomerType = "Company" | "Individual";
 
@@ -32,8 +32,8 @@ export type CustomerInput = {
 
 export const listCustomers = (
   token: string,
-  params: { search?: string; customer_type?: string } = {}
-) => api.get<Customer[]>(token, "/customers", { ...params, limit: 200 });
+  params: Paged & { search?: string; customer_type?: string; disabled?: boolean } = {}
+) => api.get<Customer[]>(token, "/customers", { limit: 200, ...params });
 
 export const createCustomer = (token: string, input: CustomerInput) =>
   api.post<Customer>(token, "/customers", input);
@@ -43,3 +43,13 @@ export const updateCustomer = (token: string, id: string, input: CustomerInput) 
 
 export const deleteCustomer = (token: string, id: string) =>
   api.del(token, `/customers/${encodeId(id)}`);
+
+/**
+ * One record, by id.
+ *
+ * The edit pages used to fetch a page of the list and search it, which works
+ * only while everything fits on one page — past that the record is absent and
+ * the form waits forever for something that will never arrive.
+ */
+export const getCustomer = (token: string, id: string) =>
+  api.get<Customer>(token, `/customers/${encodeId(id)}`);

@@ -1,21 +1,58 @@
-# Public reverse proxy for the Medical Equipment ERP.
+# Public reverse proxy — single-tenant / self-hosted (TENANCY_MODE=single).
 #
-# Served over plain HTTP on :80 for local/single-VPS V1. To enable automatic
-# HTTPS, replace the `:80` site address with your real domain (e.g.
-# `erp.example.com`) and Caddy will provision a certificate automatically.
+# The site address comes from SITE_ADDRESS so the same file works for local
+# development and for a real deployment:
+#
+#   SITE_ADDRESS=:80                     plain HTTP on any host (default;
+#                                        local dev, or IP-only before DNS)
+#   SITE_ADDRESS=app.example.com         automatic HTTPS — Caddy obtains and
+#                                        renews a Let's Encrypt certificate
+#
+# Naming a hostname is the whole switch. Caddy provisions the certificate on
+# first request and renews it thereafter; nothing else needs configuring.
+#
+# For the shared SaaS plane use `Caddyfile.saas` instead — set
+# `CADDYFILE=Caddyfile.saas` in .env. That file adds the operator console,
+# per-tenant hostnames and on-demand TLS for customer domains.
 
 {
 	# No admin API surface needed inside the container.
 	admin off
+
+	servers {
+		# Behind Cloudflare the immediate peer is their edge, so without this
+		# every request looks like it came from Cloudflare: audit trails,
+		# rate limiting and webhook source checks all go blind.
+		#
+		# Listing the ranges is what makes CF-Connecting-IP safe to believe —
+		# an untrusted client could otherwise just send that header and forge
+		# any IP it liked.
+		#
+		# Refresh with scripts/refresh-cloudflare-ips.sh when Cloudflare
+		# publishes new ranges (rare, but they do change).
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
 # ---- Main app: frontend + backend ----
-:80 {
+{$SITE_ADDRESS} {
 	# /api/* -> FastAPI. handle_path strips the /api prefix, so a request to
 	# /api/health reaches the backend as /health (FastAPI uses root_path=/api
 	# so its OpenAPI docs at /api/docs stay correct).
 	handle_path /api/* {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			# Set X-Forwarded-For to the RESOLVED client, not the append
+			# chain. Left to default, Caddy appends the immediate peer and
+			# uvicorn reads Cloudflare's edge IP instead of the visitor.
+			#
+			# {client_ip} is the Caddyfile shorthand, populated from
+			# client_ip_headers once trusted_proxies matches the peer.
+			# {http.request.client_ip} is NOT a placeholder — it forwards
+			# literally, which is exactly how this was found.
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	# Everything else -> Next.js.
@@ -25,6 +62,7 @@
 }
 
 # ---- ERPNext admin UI (add `127.0.0.1 erp.localhost` to /etc/hosts) ----
+# Local convenience only; in production the desk is not published at all.
 http://erp.localhost {
 	reverse_proxy erpnext-nginx:8080
 }

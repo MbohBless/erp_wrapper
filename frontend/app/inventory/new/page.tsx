@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import AppShell from "@/components/AppShell";
 import DocFormShell, { DOC_FIELD, DOC_LABEL } from "@/components/ui/DocFormShell";
 import { Icon } from "@/components/icons";
-import { xaf } from "@/lib/api";
+import { groupNum, parseNum, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { listProducts } from "@/lib/products";
@@ -60,7 +60,7 @@ function StockEntryForm() {
 
   function pickItem(i: number, sku: string) {
     const p = products.find((x) => x.id === sku);
-    setRow(i, { item_code: sku, rate: receiving && p?.purchase_price != null ? String(p.purchase_price) : rows[i].rate });
+    setRow(i, { item_code: sku, rate: receiving && p?.purchase_price != null ? groupNum(String(p.purchase_price)) : rows[i].rate });
   }
 
   const totalQty = useMemo(
@@ -78,7 +78,7 @@ function StockEntryForm() {
             item_code: r.item_code.trim(),
             qty: parseFloat(r.qty) || 0,
             batch_no: r.batch_no || null,
-            rate: receiving && r.rate ? parseFloat(r.rate) : null,
+            rate: receiving && r.rate ? parseNum(r.rate) : null,
           })),
       };
       return receiving ? receiveGoods(token as string, input) : issueGoods(token as string, input);
@@ -97,7 +97,26 @@ function StockEntryForm() {
     save.mutate();
   }
 
-  const warehouses = warehousesQ.data ?? [];
+  // Group warehouses are structure, not places: ERPNext refuses them for
+  // transactions ("Group node warehouse is not allowed to select for
+  // transactions"), which reached the user as an unexplained 502. Do not offer
+  // what cannot be chosen.
+  const warehouses = (warehousesQ.data ?? []).filter((w) => !w.is_group);
+
+  // Preselect where stock actually goes. This is a distribution business —
+  // devices arrive finished and leave finished — so Finished Goods is the
+  // answer almost every time, and making someone choose it on every movement
+  // is a keystroke that only ever has one right value.
+  //
+  // Only fills an EMPTY field, so a deliberate choice is never overwritten,
+  // and falls back to the sole warehouse when there is only one.
+  useEffect(() => {
+    if (warehouse || warehouses.length === 0) return;
+    const preferred =
+      warehouses.find((w) => /finished goods/i.test(w.id)) ??
+      (warehouses.length === 1 ? warehouses[0] : undefined);
+    if (preferred) setWarehouse(preferred.id);
+  }, [warehouses, warehouse]);
 
   return (
     <DocFormShell
@@ -119,12 +138,24 @@ function StockEntryForm() {
             <label className={DOC_LABEL}>{t("inventory.entryType")}</label>
             <input className={`${DOC_FIELD} opacity-70`} value={receiving ? t("inventory.materialReceipt") : t("inventory.materialIssue")} disabled />
           </div>
+          {/* With a single stock location there is nothing to decide, so the
+              field is shown read-only rather than as a select of one. It
+              becomes a real picker again the moment a second warehouse exists —
+              no deploy needed, the list comes from ERPNext. */}
           <div className="md:col-span-2">
             <label className={DOC_LABEL}>{receiving ? t("inventory.targetWarehouse") : t("inventory.sourceWarehouse")} *</label>
-            <select className={DOC_FIELD} value={warehouse} onChange={(e) => setWarehouse(e.target.value)} required>
-              <option value="">{t("inventory.selectWarehouse")}</option>
-              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            {warehouses.length <= 1 ? (
+              <input
+                className={`${DOC_FIELD} opacity-70`}
+                value={warehouses[0]?.name ?? t("inventory.selectWarehouse")}
+                disabled
+              />
+            ) : (
+              <select className={DOC_FIELD} value={warehouse} onChange={(e) => setWarehouse(e.target.value)} required>
+                <option value="">{t("inventory.selectWarehouse")}</option>
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            )}
           </div>
         </div>
       )}
@@ -171,7 +202,7 @@ function StockEntryForm() {
                       </td>
                       {receiving && (
                         <td className="px-2 py-2">
-                          <input className={`${CELL} text-right`} type="number" min="0" step="any" value={r.rate} onChange={(e) => setRow(i, { rate: e.target.value })} />
+                          <input className={`${CELL} text-right`} inputMode="numeric" value={r.rate} onChange={(e) => setRow(i, { rate: groupNum(e.target.value) })} />
                         </td>
                       )}
                       <td className="px-2 py-2 text-center">

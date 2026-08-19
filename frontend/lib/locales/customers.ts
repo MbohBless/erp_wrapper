@@ -1,6 +1,8 @@
 // Customers module: list page, form and detail drawer.
 export const customers = {
   en: {
+    "customers.type.hint": "ERPNext accounting distinction. Leave as Company unless billing a private individual.",
+    "customers.error.groupRequired": "Choose a customer type.",
     "customers.title": "Customers",
     "customers.subtitle": "Hospital, clinic and pharmacy accounts",
     "customers.new": "New customer",
@@ -28,7 +30,7 @@ export const customers = {
     "customers.field.type": "Type",
     "customers.field.phone": "Phone",
     "customers.field.email": "Email",
-    "customers.field.customerGroup": "Customer group",
+    "customers.field.customerGroup": "Customer type",
     "customers.field.territory": "Territory",
     "customers.field.contactPerson": "Contact person",
     "customers.field.taxId": "Tax ID",
@@ -37,7 +39,7 @@ export const customers = {
     "customers.disabledHint": "Disabled (hidden from new transactions)",
     "customers.error.nameRequired": "Account name is required.",
     "customers.error.save": "Could not save customer",
-    "customers.detail.group": "Group",
+    "customers.detail.group": "Type",
     "customers.detail.territory": "Territory",
     "customers.detail.contactPerson": "Contact person",
     "customers.detail.phone": "Phone",
@@ -46,6 +48,8 @@ export const customers = {
     "customers.detail.address": "Address",
   },
   fr: {
+    "customers.type.hint": "Distinction comptable ERPNext. Laissez sur Entreprise sauf pour un particulier.",
+    "customers.error.groupRequired": "Choisissez un type de client.",
     "customers.title": "Clients",
     "customers.subtitle": "Comptes hôpitaux, cliniques et pharmacies",
     "customers.new": "Nouveau client",
@@ -73,7 +77,7 @@ export const customers = {
     "customers.field.type": "Type",
     "customers.field.phone": "Téléphone",
     "customers.field.email": "E-mail",
-    "customers.field.customerGroup": "Groupe de clients",
+    "customers.field.customerGroup": "Type de client",
     "customers.field.territory": "Territoire",
     "customers.field.contactPerson": "Personne à contacter",
     "customers.field.taxId": "Identifiant fiscal",
@@ -82,7 +86,7 @@ export const customers = {
     "customers.disabledHint": "Désactivé (masqué des nouvelles transactions)",
     "customers.error.nameRequired": "Le nom du compte est obligatoire.",
     "customers.error.save": "Impossible d'enregistrer le client",
-    "customers.detail.group": "Groupe",
+    "customers.detail.group": "Type",
     "customers.detail.territory": "Territoire",
     "customers.detail.contactPerson": "Personne à contacter",
     "customers.detail.phone": "Téléphone",

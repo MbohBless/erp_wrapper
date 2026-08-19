@@ -13,11 +13,14 @@ export default function ListPanel({
   dotColor,
   rows,
   action,
+  emptyText = "Nothing to show.",
 }: {
   title: string;
   dotColor: string; // css color
   rows: ListRow[];
   action?: string;
+  /** Shown instead of rows when there is genuinely no data. */
+  emptyText?: string;
 }) {
   return (
     <Blueprint className="p-0 overflow-hidden">
@@ -29,6 +32,9 @@ export default function ListPanel({
         {action && <span className="text-xs text-accent cursor-pointer">{action}</span>}
       </div>
       <div>
+        {rows.length === 0 && (
+          <div className="px-5 py-10 text-center muted-2 text-sm">{emptyText}</div>
+        )}
         {rows.map((row, i) => (
           <div
             key={i}

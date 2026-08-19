@@ -6,27 +6,33 @@ import { useQuery } from "@tanstack/react-query";
 import AppShell from "@/components/AppShell";
 import MaintenanceForm from "@/components/maintenance/MaintenanceForm";
 import { useAuth } from "@/lib/auth";
-import { listTickets } from "@/lib/maintenance";
+import { useI18n } from "@/lib/i18n";
+import { getTicket } from "@/lib/maintenance";
 
-export default function EditMaintenancePage() {
+export default function EditTicketPage() {
   const params = useParams<{ id: string }>();
-  const id = decodeURIComponent(params.id);
+  const id = decodeURIComponent(String(params.id));
   const { token } = useAuth();
+  const { t } = useI18n();
 
-  const { data } = useQuery({
-    queryKey: ["maintenance", "", ""],
-    queryFn: () => listTickets(token as string, {}),
+  // Fetched by id, not searched for in a page of the list. The list is paged,
+  // so a record past the first page was simply absent and the form waited
+  // forever for something that was never coming.
+  const { data, isLoading } = useQuery({
+    queryKey: ["maintenance", id],
+    queryFn: () => getTicket(token as string, id),
     enabled: !!token,
+    retry: false,
   });
-
-  const record = (data ?? []).find((t) => t.id === id);
 
   return (
     <AppShell>
-      {record ? (
-        <MaintenanceForm initial={record} />
+      {data ? (
+        <MaintenanceForm initial={data} />
       ) : (
-        <div className="eq-view muted">Loading…</div>
+        <div className="eq-view muted">
+          {isLoading ? t("common.loading") : t("common.recordNotFound")}
+        </div>
       )}
     </AppShell>
   );

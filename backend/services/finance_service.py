@@ -5,16 +5,11 @@ from datetime import date
 from repositories.finance_repository import FinanceRepository
 from schemas.finance import (
     BookResult,
+    CashFlowResult,
     FinanceSummary,
     LedgerResult,
     StatementResult,
-)
-from schemas.ohada import OhadaStatement
-from services.ohada_service import (
-    bilan,
-    compte_de_resultat,
-    etat_annexe,
-    tableau_flux,
+    TrialBalanceResult,
 )
 
 
@@ -51,27 +46,21 @@ class FinanceService:
     ) -> StatementResult:
         return await self.repo.balance_sheet(company, fiscal_year, from_date, to_date, periodicity)
 
-    # ---- OHADA / SYSCOHADA statutory statements ----
-    async def ohada_income_statement(
-        self, company: str, fiscal_year=None, from_date=None, to_date=None, regime=None
-    ) -> OhadaStatement:
-        accounts = await self.repo.trial_balance(company, fiscal_year, from_date, to_date)
-        return compte_de_resultat(accounts, fiscal_year, regime)
+    async def trial_balance(
+        self, company: str, fiscal_year=None, from_date=None, to_date=None
+    ) -> TrialBalanceResult:
+        return await self.repo.trial_balance(company, fiscal_year, from_date, to_date)
 
-    async def ohada_balance_sheet(
-        self, company: str, fiscal_year=None, from_date=None, to_date=None, regime=None
-    ) -> OhadaStatement:
-        accounts = await self.repo.trial_balance(company, fiscal_year, from_date, to_date)
-        return bilan(accounts, fiscal_year, regime)
+    async def cash_flow(
+        self, company=None, fiscal_year=None, from_date=None, to_date=None
+    ) -> CashFlowResult:
+        return await self.repo.cash_flow(company, fiscal_year, from_date, to_date)
 
-    async def ohada_cash_flow(
-        self, company: str, fiscal_year=None, from_date=None, to_date=None, regime=None
-    ) -> OhadaStatement:
-        book = await self.repo.treasury_book(company, fiscal_year, from_date, to_date)
-        return tableau_flux(book, fiscal_year)
+    async def default_company(self) -> str:
+        return await self.repo.default_company()
 
-    async def ohada_etat_annexe(
-        self, company: str, fiscal_year=None, from_date=None, to_date=None, regime=None
-    ) -> OhadaStatement:
-        accounts = await self.repo.trial_balance(company, fiscal_year, from_date, to_date)
-        return etat_annexe(accounts, fiscal_year)
+    async def account_balances(self, company, fiscal_year=None, from_date=None, to_date=None) -> list[dict]:
+        return await self.repo.account_balances(company, fiscal_year, from_date, to_date)
+
+    async def account_monthly(self, company, fiscal_year) -> dict:
+        return await self.repo.account_monthly(company, fiscal_year)

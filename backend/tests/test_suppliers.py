@@ -125,10 +125,13 @@ def test_manager_can_manage(client, make_token, fake_erpnext):
     )
 
 
-def test_accountant_can_view_but_not_write(client, admin_token, make_token, fake_erpnext):
+def test_accountant_cannot_reach_suppliers(client, admin_token, make_token, fake_erpnext):
+    """Suppliers are the Manager's to operate. What the Accountant still sees is
+    what is *owed* to them — the payables ledger and the statements — which come
+    from Finance, not from here."""
     _create(client, admin_token, name="View Co")
     token = make_token("Accountant")
-    assert client.get("/suppliers", headers=auth_header(token)).status_code == 200
+    assert client.get("/suppliers", headers=auth_header(token)).status_code == 403
     assert _create(client, token, name="Acct Co").status_code == 403
 
 

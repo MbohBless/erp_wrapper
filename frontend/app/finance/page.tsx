@@ -8,28 +8,44 @@ import Blueprint from "@/components/Blueprint";
 import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useAppName } from "@/lib/branding";
+import { useCompanyName } from "@/lib/company";
 import {
   type BookResult,
+  type CashFlowResult,
   type FinanceSummary,
   type LedgerResult,
   type OutstandingItem,
   type StatementResult,
+  type TrialBalanceResult,
   getBalanceSheet,
   getBankBook,
   getCashBook,
+  getCashFlow,
   getFinanceSummary,
   getIncomeStatement,
   getPayable,
   getReceivable,
+  getTrialBalance,
 } from "@/lib/finance";
 
-type Tab = "summary" | "receivables" | "payables" | "cash" | "bank" | "statements";
+type Tab =
+  | "summary"
+  | "receivables"
+  | "payables"
+  | "cash"
+  | "bank"
+  | "trial"
+  | "cashflow"
+  | "statements";
 const TABS: { key: Tab; labelKey: string }[] = [
   { key: "summary", labelKey: "finance.tab.summary" },
   { key: "receivables", labelKey: "finance.tab.receivables" },
   { key: "payables", labelKey: "finance.tab.payables" },
   { key: "cash", labelKey: "finance.tab.cash" },
   { key: "bank", labelKey: "finance.tab.bank" },
+  { key: "trial", labelKey: "finance.tab.trial" },
+  { key: "cashflow", labelKey: "finance.tab.cashflow" },
   { key: "statements", labelKey: "finance.tab.statements" },
 ];
 
@@ -42,6 +58,7 @@ export default function FinancePage() {
 }
 
 function FinanceContent() {
+  const appName = useAppName();
   const { token, logout } = useAuth();
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("summary");
@@ -49,7 +66,7 @@ function FinanceContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("finance.title")}</span>
       </nav>
@@ -83,6 +100,8 @@ function FinanceContent() {
       {tab === "payables" && <LedgerTab token={token} kind="payable" onAuthError={logout} />}
       {tab === "cash" && <BookTab token={token} kind="cash" onAuthError={logout} />}
       {tab === "bank" && <BookTab token={token} kind="bank" onAuthError={logout} />}
+      {tab === "trial" && <TrialBalanceTab token={token} />}
+      {tab === "cashflow" && <CashFlowTab token={token} />}
       {tab === "statements" && <StatementsTab token={token} />}
     </div>
   );
@@ -167,7 +186,8 @@ function LedgerTab({ token, kind, onAuthError }: { token: string | null; kind: "
   const party = kind === "receivable" ? t("finance.party.customer") : t("finance.party.supplier");
   const buckets: [string, number][] = [
     [t("finance.bucket.current"), d.totals.current], ["1-30", d.totals.d30], ["31-60", d.totals.d60],
-    ["61-90", d.totals.d90], ["90+", d.totals.older], [t("finance.bucket.total"), d.totals.total],
+    ["61-90", d.totals.d90], ["91-120", d.totals.d120], ["120+", d.totals.older],
+    [t("finance.bucket.total"), d.totals.total],
   ];
   return (
     <>
@@ -211,7 +231,11 @@ function LedgerTab({ token, kind, onAuthError }: { token: string | null; kind: "
 
 function Bucket({ b }: { b: string }) {
   const { t } = useI18n();
-  const cls = b === "Current" ? "text-ok" : b === "90+" ? "text-err" : b === "61-90" ? "text-warn" : "muted";
+  const cls =
+    b === "Current" ? "text-ok"
+    : b === "120+" ? "text-err"
+    : b === "91-120" || b === "61-90" ? "text-warn"
+    : "muted";
   const label = b === "Current" ? t("finance.bucket.current") : b;
   return <span className={`text-[13px] ${cls}`}>{label}</span>;
 }
@@ -272,11 +296,202 @@ function BookTab({ token, kind, onAuthError }: { token: string | null; kind: "ca
   );
 }
 
+// --------------------------------------------------------- Trial balance
+function useCompanyYear() {
+  const defaultCompany = useCompanyName();
+  const [company, setCompany] = useState("");
+  useEffect(() => {
+    setCompany((c) => c || defaultCompany);
+  }, [defaultCompany]);
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  return { company, setCompany, year, setYear };
+}
+
+function QueryControls({
+  company, setCompany, year, setYear, busy, onRun,
+}: {
+  company: string; setCompany: (v: string) => void;
+  year: string; setYear: (v: string) => void;
+  busy: boolean; onRun: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-wrap items-end gap-2.5 mb-5">
+      <div>
+        <label className="block text-[13px] muted mb-2">{t("finance.company")}</label>
+        <input className="eq-field px-4 py-3 text-[15px]" value={company} onChange={(e) => setCompany(e.target.value)} />
+      </div>
+      <div className="w-28">
+        <label className="block text-[13px] muted mb-2">{t("finance.fiscalYear")}</label>
+        <input className="eq-field w-full px-4 py-3 text-[15px]" value={year} onChange={(e) => setYear(e.target.value)} />
+      </div>
+      <button type="button" onClick={onRun} disabled={busy || !company} className="btn btn-filled">
+        {busy ? t("finance.running") : t("finance.generate")}
+      </button>
+    </div>
+  );
+}
+
+function TrialBalanceTab({ token }: { token: string | null }) {
+  const { t } = useI18n();
+  const { company, setCompany, year, setYear } = useCompanyYear();
+  const [result, setResult] = useState<TrialBalanceResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    if (!token || !company) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await getTrialBalance(token, { company, fiscal_year: year || undefined }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("finance.failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const balanced = result ? Math.round(result.total_debit - result.total_credit) === 0 : true;
+
+  return (
+    <div>
+      <QueryControls company={company} setCompany={setCompany} year={year} setYear={setYear} busy={busy} onRun={run} />
+      {error && <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2.5 rounded-xl text-[13px] mb-4">{error}</div>}
+      {!result ? (
+        <div className="blueprint p-10 text-center muted-2 text-sm">{t("finance.chooseStatement")}</div>
+      ) : result.rows.length === 0 ? (
+        <div className="blueprint p-10 text-center muted-2 text-sm">{t("finance.noData")}</div>
+      ) : (
+        <Blueprint className="p-0 overflow-hidden">
+          <div className="overflow-x-auto eq-scroll">
+            <table className="w-full text-sm border-collapse min-w-[560px]">
+              <thead>
+                <tr className="muted">
+                  <Th className="pl-5">{t("finance.col.account")}</Th>
+                  <Th className="!text-right">{t("finance.col.debit")}</Th>
+                  <Th className="!text-right pr-5">{t("finance.col.credit")}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.rows.map((r, i) => (
+                  <tr key={i} className="border-b border-solid divide-soft">
+                    <td className="pl-5 py-2.5 font-medium">{r.account}</td>
+                    <td className="py-2.5 text-right num">{r.debit ? xaf(r.debit) : "—"}</td>
+                    <td className="px-5 py-2.5 text-right num">{r.credit ? xaf(r.credit) : "—"}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-divider font-semibold">
+                  <td className="pl-5 py-3">{t("finance.bucket.total")}</td>
+                  <td className="py-3 text-right num">{xaf(result.total_debit)}</td>
+                  <td className="px-5 py-3 text-right num">{xaf(result.total_credit)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Blueprint>
+      )}
+      {result && (
+        <p className={`mt-3 text-[13px] ${balanced ? "text-ok" : "text-err"}`}>
+          {balanced ? t("finance.tb.balanced") : t("finance.tb.unbalanced")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------- Cash flow
+function CashFlowTab({ token }: { token: string | null }) {
+  const { t } = useI18n();
+  const { company, setCompany, year, setYear } = useCompanyYear();
+  const [result, setResult] = useState<CashFlowResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    if (!token) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await getCashFlow(token, { company: company || undefined, fiscal_year: year || undefined }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("finance.failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <QueryControls company={company} setCompany={setCompany} year={year} setYear={setYear} busy={busy} onRun={run} />
+      {error && <div className="text-err bg-[color-mix(in_srgb,var(--err-raw)_12%,transparent)] px-3 py-2.5 rounded-xl text-[13px] mb-4">{error}</div>}
+      {!result ? (
+        <div className="blueprint p-10 text-center muted-2 text-sm">{t("finance.chooseStatement")}</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <StatCard label={t("finance.cf.opening")} value={xaf(result.opening)} small />
+            <StatCard label={t("finance.cf.totalReceived")} value={xaf(result.total_in)} small valueClass="text-ok" />
+            <StatCard label={t("finance.cf.totalPaid")} value={xaf(result.total_out)} small valueClass="text-err" />
+            <StatCard label={t("finance.cf.closing")} value={xaf(result.closing)} small valueClass="text-accent" />
+          </div>
+          <Blueprint className="p-0 overflow-hidden">
+            <table className="w-full text-sm border-collapse">
+              <tbody>
+                <CfRow label={t("finance.cf.opening")} value={xaf(result.opening)} bold />
+                <CfSection label={t("finance.cf.received")} />
+                {result.inflows.length === 0 ? (
+                  <CfRow label={t("finance.cf.none")} value="—" indent muted />
+                ) : (
+                  result.inflows.map((l, i) => <CfRow key={`i${i}`} label={l.label} value={xaf(l.amount)} indent />)
+                )}
+                <CfRow label={t("finance.cf.totalReceived")} value={xaf(result.total_in)} bold />
+                <CfSection label={t("finance.cf.paid")} />
+                {result.outflows.length === 0 ? (
+                  <CfRow label={t("finance.cf.none")} value="—" indent muted />
+                ) : (
+                  result.outflows.map((l, i) => <CfRow key={`o${i}`} label={l.label} value={xaf(l.amount)} indent />)
+                )}
+                <CfRow label={t("finance.cf.totalPaid")} value={xaf(result.total_out)} bold />
+                <CfRow label={t("finance.cf.net")} value={xaf(result.net_change)} bold valueClass={result.net_change >= 0 ? "text-ok" : "text-err"} />
+                <CfRow label={t("finance.cf.closing")} value={xaf(result.closing)} bold valueClass="text-accent" />
+              </tbody>
+            </table>
+          </Blueprint>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CfSection({ label }: { label: string }) {
+  return (
+    <tr className="border-b border-solid divide-soft bg-[color-mix(in_srgb,var(--color-text)_3%,transparent)]">
+      <td colSpan={2} className="px-5 py-2 text-[11px] tracking-[0.1em] uppercase muted font-semibold">{label}</td>
+    </tr>
+  );
+}
+
+function CfRow({ label, value, bold, indent, muted, valueClass }: {
+  label: string; value: string; bold?: boolean; indent?: boolean; muted?: boolean; valueClass?: string;
+}) {
+  return (
+    <tr className={`border-b border-solid divide-soft ${bold ? "font-semibold" : ""}`}>
+      <td className={`py-2.5 ${indent ? "pl-10" : "pl-5"} ${muted ? "muted-2" : ""}`}>{label}</td>
+      <td className={`px-5 py-2.5 text-right num ${valueClass ?? ""}`}>{value}</td>
+    </tr>
+  );
+}
+
 // --------------------------------------------------------- Statements
 function StatementsTab({ token }: { token: string | null }) {
   const { t } = useI18n();
   const [which, setWhich] = useState<"income-statement" | "balance-sheet">("income-statement");
-  const [company, setCompany] = useState("EquiMed");
+  const defaultCompany = useCompanyName();
+  const [company, setCompany] = useState("");
+  useEffect(() => {
+    setCompany((c) => c || defaultCompany);
+  }, [defaultCompany]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [result, setResult] = useState<StatementResult | null>(null);
   const [busy, setBusy] = useState(false);

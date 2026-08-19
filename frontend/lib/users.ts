@@ -8,6 +8,14 @@ export type Role =
   | "Accountant"
   | "Biomedical Engineer";
 
+/**
+ * Every role the product defines.
+ *
+ * Not the same as the roles a given workspace hands out — a deployment can
+ * retire one it does not use (DISABLED_ROLES). Use `getAssignableRoles` when
+ * offering a choice; this list is the fallback for when that call has not
+ * returned yet, and the type's full domain for reading a user back.
+ */
 export const ROLES: Role[] = [
   "Administrator",
   "Manager",
@@ -16,6 +24,10 @@ export const ROLES: Role[] = [
   "Accountant",
   "Biomedical Engineer",
 ];
+
+/** The roles this deployment will actually assign. Administrator only. */
+export const getAssignableRoles = (token: string) =>
+  api.get<Role[]>(token, "/users/roles");
 
 export type User = {
   id: number;

@@ -21,11 +21,16 @@ class FinanceSummary(BaseModel):
 
 # ---- Aged receivable / payable ledger ----
 class AgingBuckets(BaseModel):
-    current: float = 0
-    d30: float = 0
-    d60: float = 0
-    d90: float = 0
-    older: float = 0
+    current: float = 0    # not yet due
+    d30: float = 0        # 1-30 days overdue
+    d60: float = 0        # 31-60
+    d90: float = 0        # 61-90
+    # 91-120 was previously folded into `older`, which put a debt four months
+    # late beside one a year late and gave collections nothing to sort on. The
+    # boundary is 120 to match ERPNext's own ageing, so the two reports can be
+    # read side by side.
+    d120: float = 0       # 91-120
+    older: float = 0      # over 120
     total: float = 0
 
 
@@ -37,7 +42,7 @@ class LedgerRow(BaseModel):
     grand_total: float
     outstanding: float
     age_days: int
-    bucket: str  # "Current" | "1-30" | "31-60" | "61-90" | "90+"
+    bucket: str  # "Current" | "1-30" | "31-60" | "61-90" | "91-120" | "120+"
 
 
 class LedgerResult(BaseModel):
@@ -78,3 +83,34 @@ class StatementLine(BaseModel):
 class StatementResult(BaseModel):
     title: str
     rows: list[StatementLine]
+
+
+# ---- Trial balance (closing debit/credit per leaf account) ----
+class TrialBalanceRow(BaseModel):
+    account: str
+    debit: float = 0
+    credit: float = 0
+
+
+class TrialBalanceResult(BaseModel):
+    title: str = "Trial Balance"
+    rows: list[TrialBalanceRow]
+    total_debit: float = 0
+    total_credit: float = 0
+
+
+# ---- Cash flow statement (direct method, from the cash & bank ledger) ----
+class CashFlowLine(BaseModel):
+    label: str
+    amount: float = 0
+
+
+class CashFlowResult(BaseModel):
+    title: str = "Cash Flow Statement"
+    opening: float = 0
+    closing: float = 0
+    total_in: float = 0
+    total_out: float = 0
+    net_change: float = 0
+    inflows: list[CashFlowLine]
+    outflows: list[CashFlowLine]

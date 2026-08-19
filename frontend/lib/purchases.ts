@@ -1,7 +1,9 @@
-import { api, encodeId } from "@/lib/http";
+import { type Paged, api, encodeId } from "@/lib/http";
 
 export type BillLine = {
   item_code: string;
+  /** As billed; null on list rows. See InvoiceLine in lib/sales.ts. */
+  item_name: string | null;
   qty: number;
   rate: number;
   amount: number;
@@ -18,6 +20,9 @@ export type PurchaseInvoice = {
   status: string;
   remarks: string | null;
   items: BillLine[];
+  amended_from: string | null;
+  is_cancelled: boolean;
+  is_opening: boolean;
 };
 
 export type PurchaseInput = {
@@ -30,11 +35,29 @@ export type PurchaseInput = {
 
 export const listPurchases = (
   token: string,
-  params: { search?: string; status?: string } = {}
-) => api.get<PurchaseInvoice[]>(token, "/purchases", { ...params, limit: 200 });
+  params: Paged & { search?: string; status?: string } = {}
+) => api.get<PurchaseInvoice[]>(token, "/purchases", { limit: 200, ...params });
 
 export const getPurchase = (token: string, id: string) =>
   api.get<PurchaseInvoice>(token, `/purchases/${encodeId(id)}`);
 
 export const createPurchase = (token: string, input: PurchaseInput) =>
   api.post<PurchaseInvoice>(token, "/purchases", input);
+
+/**
+ * Correct a posted supplier bill — cancel-then-amend, so the bill number
+ * changes. See `updateSale` in lib/sales.ts; the semantics are identical.
+ */
+export const updatePurchase = (token: string, id: string, input: PurchaseInput) =>
+  api.put<PurchaseInvoice>(token, `/purchases/${encodeId(id)}`, input);
+
+/** Why this bill cannot be corrected, or null if it can. Mirrors
+ * `PurchaseService._ensure_amendable`; the API refuses independently. */
+export function amendBlockedReason(
+  bill: PurchaseInvoice
+): "opening" | "settled" | null {
+  if (bill.is_opening) return "opening";
+  if (bill.is_cancelled) return null;
+  if (bill.grand_total - bill.outstanding_amount > 0.005) return "settled";
+  return null;
+}

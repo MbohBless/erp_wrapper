@@ -4,8 +4,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class CompanyProfileBase(BaseModel):
-    display_name: str = "EquiMed"
-    legal_name: str = "EquiMed SA"
+    display_name: str = ""
+    legal_name: str = ""
     tagline: str = "Medical Equipment Distribution"
     address_line: str = ""
     city: str = "Douala"
@@ -18,7 +18,6 @@ class CompanyProfileBase(BaseModel):
     currency: str = "XAF"
     signatory_name: str = ""
     signatory_title: str = "Authorized Signatory"
-    ohada_regime: str = "Système Normal"
     accent_color: str = "#416180"
     logo_data_url: str = ""
 

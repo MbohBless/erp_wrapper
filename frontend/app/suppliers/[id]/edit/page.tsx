@@ -6,24 +6,34 @@ import { useQuery } from "@tanstack/react-query";
 import AppShell from "@/components/AppShell";
 import SupplierForm from "@/components/suppliers/SupplierForm";
 import { useAuth } from "@/lib/auth";
-import { listSuppliers } from "@/lib/suppliers";
+import { useI18n } from "@/lib/i18n";
+import { getSupplier } from "@/lib/suppliers";
 
 export default function EditSupplierPage() {
-  const { token } = useAuth();
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const id = decodeURIComponent(String(params.id));
+  const { token } = useAuth();
+  const { t } = useI18n();
 
-  const { data } = useQuery({
-    queryKey: ["suppliers"],
-    queryFn: () => listSuppliers(token as string),
+  // Fetched by id, not searched for in a page of the list. The list is paged,
+  // so a record past the first page was simply absent and the form waited
+  // forever for something that was never coming.
+  const { data, isLoading } = useQuery({
+    queryKey: ["suppliers", id],
+    queryFn: () => getSupplier(token as string, id),
     enabled: !!token,
+    retry: false,
   });
-
-  const record = (data ?? []).find((s) => s.id === id) ?? null;
 
   return (
     <AppShell>
-      {record ? <SupplierForm initial={record} /> : <div className="eq-view muted">Loading…</div>}
+      {data ? (
+        <SupplierForm initial={data} />
+      ) : (
+        <div className="eq-view muted">
+          {isLoading ? t("common.loading") : t("common.recordNotFound")}
+        </div>
+      )}
     </AppShell>
   );
 }

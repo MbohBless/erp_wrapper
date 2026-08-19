@@ -13,11 +13,14 @@ import { Icon } from "@/components/icons";
 import RowActions from "@/components/ui/RowActions";
 import StatusTag, { invoiceTone } from "@/components/ui/StatusTag";
 import TableSkeleton from "@/components/ui/TableSkeleton";
-import { useDebounced } from "@/components/ui/hooks";
+import Pagination from "@/components/ui/Pagination";
+import { useDebounced, usePaged } from "@/components/ui/hooks";
 import { UnauthorizedError, shortDate, xaf } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { type SalesInvoice, listSales } from "@/lib/sales";
+import { amendBlockedReason, type SalesInvoice, listSales } from "@/lib/sales";
+import { useRole } from "@/lib/role";
+import { useAppName } from "@/lib/branding";
 
 export default function SalesPage() {
   return (
@@ -29,8 +32,10 @@ export default function SalesPage() {
 
 
 function SalesContent() {
+  const appName = useAppName();
   const { t } = useI18n();
   const { token, logout } = useAuth();
+  const { role } = useRole();
   const qc = useQueryClient();
   const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
@@ -40,25 +45,43 @@ function SalesContent() {
   const [payError, setPayError] = useState<string | null>(null);
 
   const search = useDebounced(searchInput);
+  const paged = usePaged([search, statusFilter]);
+
+  // Correcting a posted invoice cancels it and re-posts a replacement, so it is
+  // Manager/Administrator only — the API enforces that independently; this only
+  // decides whether to offer it. Blocked invoices keep the action hidden and
+  // explain themselves in the drawer instead of failing after the click.
+  const mayAmend = role === "Administrator" || role === "Manager";
+  const amendable = (inv: SalesInvoice) => mayAmend && !amendBlockedReason(inv);
+  const editInvoice = (inv: SalesInvoice) =>
+    router.push(`/sales/${encodeURIComponent(inv.id)}/edit`);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["sales", search],
-    queryFn: () => listSales(token as string, { search: search || undefined }),
+    queryKey: ["sales", search, statusFilter, paged.page],
+    queryFn: () =>
+      listSales(token as string, {
+        search: search || undefined,
+        // Filtered by the server, not by the array below: filtering
+        // what was fetched would only ever filter the page in front
+        // of you, and silently hide matches on every other one.
+        status: statusFilter || undefined,
+        limit: paged.fetchLimit,
+        start: paged.start,
+      }),
     enabled: !!token,
+    // Keep the current page on screen while the next one loads, so
+    // paging does not flash an empty table.
+    placeholderData: (prev) => prev,
   });
 
   useEffect(() => {
     if (error instanceof UnauthorizedError) logout();
   }, [error, logout]);
 
-  const rows = useMemo(() => {
-    let list = data ?? [];
-    if (statusFilter)
-      list = list.filter((i) =>
-        i.status.toLowerCase().includes(statusFilter.toLowerCase())
-      );
-    return list;
-  }, [data, statusFilter]);
+  // One row more than the page shows was fetched, purely to learn
+  // whether a next page exists. Trim it before rendering.
+  const rows = useMemo(() => (data ?? []).slice(0, paged.size), [data, paged.size]);
+  const hasNext = (data?.length ?? 0) > paged.size;
 
   const payMut = useMutation({
     mutationFn: (v: PaymentValue) =>
@@ -80,7 +103,7 @@ function SalesContent() {
   return (
     <div className="eq-view">
       <nav className="flex items-center gap-2 text-xs muted mb-3">
-        <span>EquiMed</span>
+        <span>{appName}</span>
         <span>›</span>
         <span className="text-ink">{t("sales.title")}</span>
       </nav>
@@ -180,7 +203,10 @@ function SalesContent() {
                       <StatusTag label={inv.status} tone={invoiceTone(inv.status)} />
                     </td>
                     <td className="py-3 pr-4">
-                      <RowActions onView={() => setViewing(inv)} />
+                      <RowActions
+                        onView={() => setViewing(inv)}
+                        onEdit={amendable(inv) ? () => editInvoice(inv) : undefined}
+                      />
                     </td>
                   </tr>
                 ))
@@ -188,12 +214,20 @@ function SalesContent() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={paged.page}
+          size={paged.size}
+          count={rows.length}
+          hasNext={hasNext}
+          onChange={paged.setPage}
+        />
       </Blueprint>
 
       {viewing && (
         <InvoiceDrawer
           invoice={viewing}
           onClose={() => setViewing(null)}
+          onEdit={mayAmend ? () => editInvoice(viewing) : undefined}
           onRecordPayment={() => {
             setPayError(null);
             setPaying(viewing);

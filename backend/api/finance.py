@@ -4,29 +4,22 @@ Access (Administrator always allowed): Manager, Accountant.
 """
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
 from api.deps import get_finance_service, require_roles
-from database import get_db
 from models.user import Role
-from repositories.company_repository import CompanyRepository
 from schemas.finance import (
     BookResult,
+    CashFlowResult,
     FinanceSummary,
     LedgerResult,
     StatementResult,
+    TrialBalanceResult,
 )
-from schemas.ohada import OhadaStatement
 from services.finance_service import FinanceService
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
 can_view = require_roles(Role.MANAGER, Role.ACCOUNTANT)
-
-
-def _default_regime(db: Session = Depends(get_db)) -> str:
-    """The OHADA regime stored on the company profile (query param overrides)."""
-    return CompanyRepository(db).get().ohada_regime
 
 
 @router.get("/summary", response_model=FinanceSummary, dependencies=[Depends(can_view)])
@@ -92,73 +85,23 @@ async def balance_sheet(
     return await service.balance_sheet(company, fiscal_year, from_date, to_date, periodicity)
 
 
-@router.get(
-    "/reports/ohada/compte-de-resultat",
-    response_model=OhadaStatement,
-    dependencies=[Depends(can_view)],
-)
-async def ohada_income_statement(
-    company: str,
-    fiscal_year: str | None = None,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    regime: str | None = None,
-    default_regime: str = Depends(_default_regime),
-    service: FinanceService = Depends(get_finance_service),
-) -> OhadaStatement:
-    """OHADA — Compte de résultat (regime from the company profile unless overridden)."""
-    return await service.ohada_income_statement(
-        company, fiscal_year, from_date, to_date, regime or default_regime
-    )
-
-
-@router.get(
-    "/reports/ohada/bilan",
-    response_model=OhadaStatement,
-    dependencies=[Depends(can_view)],
-)
-async def ohada_balance_sheet(
-    company: str,
-    fiscal_year: str | None = None,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    regime: str | None = None,
-    default_regime: str = Depends(_default_regime),
-    service: FinanceService = Depends(get_finance_service),
-) -> OhadaStatement:
-    """OHADA — Bilan (regime from the company profile unless overridden)."""
-    return await service.ohada_balance_sheet(
-        company, fiscal_year, from_date, to_date, regime or default_regime
-    )
-
-
-@router.get(
-    "/reports/ohada/flux-de-tresorerie",
-    response_model=OhadaStatement,
-    dependencies=[Depends(can_view)],
-)
-async def ohada_cash_flow(
+@router.get("/trial-balance", response_model=TrialBalanceResult, dependencies=[Depends(can_view)])
+async def trial_balance(
     company: str,
     fiscal_year: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
     service: FinanceService = Depends(get_finance_service),
-) -> OhadaStatement:
-    """OHADA — Tableau des Flux de Trésorerie (méthode directe)."""
-    return await service.ohada_cash_flow(company, fiscal_year, from_date, to_date)
+) -> TrialBalanceResult:
+    return await service.trial_balance(company, fiscal_year, from_date, to_date)
 
 
-@router.get(
-    "/reports/ohada/etat-annexe",
-    response_model=OhadaStatement,
-    dependencies=[Depends(can_view)],
-)
-async def ohada_etat_annexe(
-    company: str,
+@router.get("/cash-flow", response_model=CashFlowResult, dependencies=[Depends(can_view)])
+async def cash_flow(
+    company: str | None = None,
     fiscal_year: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
     service: FinanceService = Depends(get_finance_service),
-) -> OhadaStatement:
-    """OHADA — État annexé (notes annexes, principales notes)."""
-    return await service.ohada_etat_annexe(company, fiscal_year, from_date, to_date)
+) -> CashFlowResult:
+    return await service.cash_flow(company, fiscal_year, from_date, to_date)

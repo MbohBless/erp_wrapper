@@ -25,6 +25,10 @@ export type AgingBuckets = {
   d30: number;
   d60: number;
   d90: number;
+  /** 91-120 days overdue. Split out of `older`, which used to run from 90 to
+   *  forever and so could not tell a debt four months late from one a year
+   *  late. The boundary matches ERPNext's own ageing. */
+  d120: number;
   older: number;
   total: number;
 };
@@ -90,38 +94,34 @@ export const getBalanceSheet = (
   params: { company: string; fiscal_year?: string }
 ) => api.get<StatementResult>(token, "/finance/reports/balance-sheet", params);
 
-// ---- OHADA / SYSCOHADA statutory statements ----
-export type OhadaLine = {
-  code: string;
-  label: string;
-  amount: number;
-  level: number;
-  kind: "header" | "line" | "subtotal" | "total" | "note";
-};
-export type OhadaStatement = {
+// ---- Trial balance ----
+export type TrialBalanceRow = { account: string; debit: number; credit: number };
+export type TrialBalanceResult = {
   title: string;
-  subtitle: string;
-  currency: string;
-  fiscal_year: string | null;
-  lines: OhadaLine[];
+  rows: TrialBalanceRow[];
+  total_debit: number;
+  total_credit: number;
 };
 
-export const getOhadaIncomeStatement = (
+export const getTrialBalance = (
   token: string,
   params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/compte-de-resultat", params);
+) => api.get<TrialBalanceResult>(token, "/finance/trial-balance", params);
 
-export const getOhadaBalanceSheet = (
-  token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/bilan", params);
+// ---- Cash flow statement (direct method) ----
+export type CashFlowLine = { label: string; amount: number };
+export type CashFlowResult = {
+  title: string;
+  opening: number;
+  closing: number;
+  total_in: number;
+  total_out: number;
+  net_change: number;
+  inflows: CashFlowLine[];
+  outflows: CashFlowLine[];
+};
 
-export const getOhadaCashFlow = (
+export const getCashFlow = (
   token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/flux-de-tresorerie", params);
-
-export const getOhadaEtatAnnexe = (
-  token: string,
-  params: { company: string; fiscal_year?: string }
-) => api.get<OhadaStatement>(token, "/finance/reports/ohada/etat-annexe", params);
+  params: { company?: string; fiscal_year?: string }
+) => api.get<CashFlowResult>(token, "/finance/cash-flow", params);

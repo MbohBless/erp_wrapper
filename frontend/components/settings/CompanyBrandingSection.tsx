@@ -28,6 +28,15 @@ const FIELDS: { key: keyof CompanyProfile; label: string; span?: boolean; placeh
   { key: "signatory_title", label: "Signatory title", placeholder: "Managing Director" },
 ];
 
+/** The accent currently in force, from the live stylesheet. */
+function effectiveAccent(): string {
+  if (typeof window === "undefined") return "#5980a6";
+  const v = getComputedStyle(document.documentElement)
+    .getPropertyValue("--color-accent")
+    .trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : "#5980a6";
+}
+
 export default function CompanyBrandingSection({ token, canEdit }: { token: string; canEdit: boolean }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -110,7 +119,10 @@ export default function CompanyBrandingSection({ token, canEdit }: { token: stri
           )}
           <label className="flex items-center gap-2.5 text-sm">
             <span className={LABEL + " mb-0"}>Accent colour</span>
-            <input type="color" value={form.accent_color || "#416180"} disabled={disabled} onChange={(e) => set("accent_color", e.target.value)} className="w-9 h-9 rounded border border-divider bg-transparent p-0.5 disabled:opacity-60" />
+            <input type="color" // Was hardcoded to #416180 — the default --color-accent-700 — so the
+              // swatch showed a blue-grey regardless of the actual theme. Fall
+              // back to the accent in force, read from the live stylesheet.
+              value={form.accent_color || effectiveAccent()} disabled={disabled} onChange={(e) => set("accent_color", e.target.value)} className="w-9 h-9 rounded border border-divider bg-transparent p-0.5 disabled:opacity-60" />
             <span className="text-xs muted num">{form.accent_color}</span>
           </label>
         </div>
@@ -129,23 +141,6 @@ export default function CompanyBrandingSection({ token, canEdit }: { token: stri
             />
           </div>
         ))}
-      </div>
-
-      {/* OHADA reporting regime */}
-      <div className="mt-6 pt-5 border-t border-solid divide-soft">
-        <label className={LABEL}>OHADA reporting regime</label>
-        <select
-          className={`${FIELD} sm:max-w-md`}
-          value={form.ohada_regime || "Système Normal"}
-          disabled={disabled}
-          onChange={(e) => set("ohada_regime", e.target.value)}
-        >
-          <option value="Système Normal">Système Normal (full statements)</option>
-          <option value="Système Minimal de Trésorerie">Système Minimal de Trésorerie (SMT — simplified)</option>
-        </select>
-        <p className="text-xs muted mt-1.5">
-          Drives the presentation of the OHADA Compte de résultat and Bilan (full SIG cascade vs. simplified).
-        </p>
       </div>
 
       {error && (

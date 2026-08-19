@@ -1,4 +1,12 @@
+"use client";
+
+import { useI18n } from "@/lib/i18n";
+
 export type Tone = "ok" | "warn" | "err" | "accent" | "neutral";
+
+/** Slug a raw status value to its translation key, e.g. "In Progress" → "status.in-progress". */
+export const statusKey = (label: string) =>
+  "status." + label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 const TONE_CLASS: Record<Tone, string> = {
   ok: "bg-[color-mix(in_srgb,var(--ok-raw)_15%,transparent)] text-ok",
@@ -25,6 +33,11 @@ export default function StatusTag({
   tone: Tone;
   dot?: boolean;
 }) {
+  const { t } = useI18n();
+  const key = statusKey(label);
+  const translated = t(key);
+  const shown = translated === key ? label : translated; // fall back to the raw value
+
   return (
     <span
       className={`inline-flex items-center text-[11px] px-2.5 py-0.5 rounded-full ${TONE_CLASS[tone]}`}
@@ -35,7 +48,7 @@ export default function StatusTag({
           style={{ background: TONE_DOT[tone] }}
         />
       )}
-      {label}
+      {shown}
     </span>
   );
 }

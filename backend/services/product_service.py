@@ -14,10 +14,11 @@ class ProductService:
         self,
         search: str | None = None,
         category: str | None = None,
+        disabled: bool | None = None,
         limit: int = 20,
         start: int = 0,
     ) -> list[ProductRead]:
-        return await self.repo.list(search, category, limit, start)
+        return await self.repo.list(search, category, disabled, limit, start)
 
     async def get(self, product_id: str) -> ProductRead:
         product = await self.repo.get(product_id)

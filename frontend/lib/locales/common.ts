@@ -1,6 +1,8 @@
 // Shared chrome: navigation, top bar, common actions, settings, generic labels.
 export const common = {
   en: {
+    "common.choose": "Choose\u2026",
+    "combo.freeText": "No match — type any value",
     "brand.tagline": "Distribution Suite",
     "nav.group.overview": "Overview",
     "nav.group.operations": "Operations",
@@ -16,6 +18,7 @@ export const common = {
     "nav.customers": "Customers",
     "nav.suppliers": "Suppliers",
     "nav.finance": "Finance",
+    "nav.budget": "Budget",
     "nav.reports": "Reports",
     "nav.settings": "Settings",
     "user.subtitle": "Operations · EquiMed SA",
@@ -34,6 +37,12 @@ export const common = {
     "action.close": "Close",
     "action.saving": "Saving…",
     "common.loading": "Loading…",
+    "common.recordNotFound": "Could not load this record. It may have been removed.",
+    "common.showingRange": "Showing {first}–{last}",
+    "common.pageEmpty": "Nothing on this page",
+    "common.previous": "Previous",
+    "common.next": "Next",
+
     "common.status": "Status",
     "common.actions": "Actions",
     "common.active": "Active",
@@ -65,6 +74,8 @@ export const common = {
     "lang.en": "English",
   },
   fr: {
+    "common.choose": "Choisir\u2026",
+    "combo.freeText": "Aucune correspondance — saisissez librement",
     "brand.tagline": "Suite de distribution",
     "nav.group.overview": "Aperçu",
     "nav.group.operations": "Opérations",
@@ -80,6 +91,7 @@ export const common = {
     "nav.customers": "Clients",
     "nav.suppliers": "Fournisseurs",
     "nav.finance": "Finance",
+    "nav.budget": "Budget",
     "nav.reports": "Rapports",
     "nav.settings": "Paramètres",
     "user.subtitle": "Opérations · EquiMed SA",
@@ -97,6 +109,12 @@ export const common = {
     "action.close": "Fermer",
     "action.saving": "Enregistrement…",
     "common.loading": "Chargement…",
+    "common.recordNotFound": "Impossible de charger cet enregistrement. Il a peut-être été supprimé.",
+    "common.showingRange": "Affichage de {first} à {last}",
+    "common.pageEmpty": "Rien sur cette page",
+    "common.previous": "Précédent",
+    "common.next": "Suivant",
+
     "common.status": "Statut",
     "common.actions": "Actions",
     "common.active": "Actif",

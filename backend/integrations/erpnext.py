@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from config import settings
+from tenancy.context import current_tenant_or_none
 
 
 class ERPNextError(Exception):
@@ -27,21 +28,36 @@ class ERPNextNotFound(ERPNextError):
 
 
 class ERPNextClient:
+    """Transport wrapper over one ERPNext site.
+
+    ``site_host`` is the multi-tenant lever. A Frappe bench serving many sites
+    picks the site from the HTTP ``Host`` header, so several tenants can share
+    one ``base_url`` while each reads and writes its own database. Leave it
+    unset for a dedicated ERPNext instance, where ``base_url`` already
+    identifies the tenant.
+    """
+
     def __init__(
         self,
         base_url: str | None = None,
         api_key: str | None = None,
         api_secret: str | None = None,
+        site_host: str | None = None,
     ) -> None:
         self.base_url = (base_url or settings.erpnext_url).rstrip("/")
         self._api_key = api_key or settings.erpnext_api_key
         self._api_secret = api_secret or settings.erpnext_api_secret
+        self.site_host = site_host or None
 
     # -- internals -----------------------------------------------------------
     def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}
         if self._api_key and self._api_secret:
             headers["Authorization"] = f"token {self._api_key}:{self._api_secret}"
+        if self.site_host:
+            # Frappe resolves the site from Host; this is what keeps tenant A's
+            # request off tenant B's database on a shared bench.
+            headers["Host"] = self.site_host
         return headers
 
     @staticmethod
@@ -128,6 +144,25 @@ class ERPNextClient:
         )
         return resp.json().get("message", doc)
 
+    async def cancel_document(self, doctype: str, name: str) -> dict:
+        """Cancel a submitted document (docstatus 1 -> 2), reversing its ledger.
+
+        ERPNext offers no other way to change a posted document: submitted
+        fields are immutable, so a correction is always cancel-then-amend.
+
+        The cancel is refused outright when something else points at the
+        document — an allocated Payment Entry, a Delivery Note, a return — and
+        that refusal arrives here as an ERPNextError carrying ERPNext's own
+        wording. Callers should rule out the common cases *before* calling, or
+        the caller gets an opaque 502 for a situation that had a plain answer.
+        """
+        resp = await self._request(
+            "POST",
+            "/api/method/frappe.client.cancel",
+            json={"doctype": doctype, "name": name},
+        )
+        return resp.json().get("message", {})
+
     async def run_report(self, report_name: str, filters: dict | None = None) -> dict:
         """Run an ERPNext Query Report (e.g. financial statements)."""
         params: dict[str, Any] = {"report_name": report_name}
@@ -154,8 +189,22 @@ class ERPNextClient:
 
 
 def get_erpnext_client() -> ERPNextClient:
-    """FastAPI dependency provider for the ERPNext client."""
-    return ERPNextClient()
+    """FastAPI dependency provider for the ERPNext client.
+
+    Builds the client from the *request's* tenant rather than from global
+    settings — this one function is what makes every ERPNext-backed service in
+    the app multi-tenant. Falls back to configuration outside a tenant-scoped
+    request (startup tasks, scripts).
+    """
+    tenant = current_tenant_or_none()
+    if tenant is None:
+        return ERPNextClient()
+    return ERPNextClient(
+        base_url=tenant.erpnext_url or settings.erpnext_url,
+        api_key=tenant.erpnext_api_key or settings.erpnext_api_key,
+        api_secret=tenant.erpnext_api_secret or settings.erpnext_api_secret,
+        site_host=tenant.erpnext_site,
+    )
 
 
 # ===========================================================================
@@ -198,23 +247,44 @@ async def create_invoice(
     remarks: str | None = None,
     update_stock: bool = False,
     taxes_and_charges: str | None = None,
+    is_commissioned: bool = False,
+    commission_agent: str | None = None,
+    amended_from: str | None = None,
     submit: bool = True,
 ) -> dict:
     """Create a Sales Invoice. `items`: [{"item_code", "qty", "rate"}, ...].
 
-    Submitted by default so it posts to the ledger.
+    Submitted by default so it posts to the ledger. Pass `amended_from` with the
+    name of an already-cancelled invoice to post this one as its replacement.
     """
     payload: dict[str, Any] = {"customer": customer, "items": items}
     if due_date:
         payload["due_date"] = due_date
     if posting_date:
+        # ERPNext ignores a supplied posting_date unless set_posting_time is
+        # also set — it silently stamps today instead. Without this, backdating
+        # an invoice appears to work and posts it to the wrong period, which is
+        # an accounting error nobody sees until a period is closed.
         payload["posting_date"] = posting_date
+        payload["set_posting_time"] = 1
     if remarks:
         payload["remarks"] = remarks
     if update_stock:
         payload["update_stock"] = 1
     if taxes_and_charges:
         payload["taxes_and_charges"] = taxes_and_charges
+    if is_commissioned:
+        # Custom Fields; see scripts/install_custom_fields.py. ERPNext's native
+        # `sales_partner`/`commission_rate` deliberately not used — those post a
+        # commission *expense and liability*, and here nothing is owed.
+        payload["custom_is_commissioned"] = 1
+        if commission_agent:
+            payload["custom_commission_agent"] = commission_agent
+    if amended_from:
+        # An amendment is a *new* document standing in for a cancelled one.
+        # ERPNext names it "<original>-1" and rejects the link unless the
+        # original is already at docstatus 2, so cancel first, then create.
+        payload["amended_from"] = amended_from
     doc = await client.create_document("Sales Invoice", payload)
     if submit:
         doc = await client.submit_document("Sales Invoice", doc["name"])
@@ -229,23 +299,96 @@ async def create_purchase(
     bill_no: str | None = None,
     posting_date: str | None = None,
     remarks: str | None = None,
+    amended_from: str | None = None,
     submit: bool = True,
 ) -> dict:
     """Create a Purchase Invoice (supplier bill). `items`: [{"item_code", "qty", "rate"}, ...].
 
-    Submitted by default so it posts to the ledger.
+    Submitted by default so it posts to the ledger. Pass `amended_from` with the
+    name of an already-cancelled bill to post this one as its replacement.
     """
     payload: dict[str, Any] = {"supplier": supplier, "items": items}
     if bill_no:
         payload["bill_no"] = bill_no
     if posting_date:
+        # ERPNext ignores a supplied posting_date unless set_posting_time is
+        # also set — it silently stamps today instead. Without this, backdating
+        # an invoice appears to work and posts it to the wrong period, which is
+        # an accounting error nobody sees until a period is closed.
         payload["posting_date"] = posting_date
+        payload["set_posting_time"] = 1
     if remarks:
         payload["remarks"] = remarks
+    if amended_from:
+        # An amendment is a *new* document standing in for a cancelled one.
+        # ERPNext names it "<original>-1" and rejects the link unless the
+        # original is already at docstatus 2, so cancel first, then create.
+        payload["amended_from"] = amended_from
     doc = await client.create_document("Purchase Invoice", payload)
     if submit:
         doc = await client.submit_document("Purchase Invoice", doc["name"])
     return doc
+
+
+async def create_journal_entry(
+    client: ERPNextClient,
+    *,
+    company: str,
+    posting_date: str,
+    accounts: list[dict],
+    remark: str,
+    is_opening: bool = False,
+) -> dict:
+    """Create + submit a Journal Entry. `accounts`: rows with account/debit/credit."""
+    payload: dict[str, Any] = {
+        "company": company,
+        "posting_date": posting_date,
+        "voucher_type": "Journal Entry",
+        "user_remark": remark,
+        "accounts": accounts,
+    }
+    if is_opening:
+        payload["is_opening"] = "Yes"
+    doc = await client.create_document("Journal Entry", payload)
+    return await client.submit_document("Journal Entry", doc["name"])
+
+
+async def create_opening_invoice(
+    client: ERPNextClient,
+    *,
+    doctype: str,          # "Sales Invoice" | "Purchase Invoice"
+    company: str,
+    party: str,
+    posting_date: str,
+    due_date: str,
+    amount: float,
+    item_code: str,
+    offset_account: str,   # balance-sheet account the opening balance offsets to
+    bill_no: str | None = None,
+    remarks: str | None = None,
+) -> dict:
+    """Create + submit an *opening* invoice (is_opening) so a pre-existing debt
+    shows in the AR/AP ledger and can be paid off. Posts party ⇄ offset_account.
+    """
+    is_sales = doctype == "Sales Invoice"
+    line: dict[str, Any] = {"item_code": item_code, "qty": 1, "rate": amount}
+    line["income_account" if is_sales else "expense_account"] = offset_account
+    payload: dict[str, Any] = {
+        "company": company,
+        "posting_date": posting_date,
+        "set_posting_time": 1,
+        "due_date": due_date,
+        "is_opening": "Yes",
+        "update_stock": 0,
+        "items": [line],
+    }
+    payload["customer" if is_sales else "supplier"] = party
+    if remarks:
+        payload["remarks"] = remarks
+    if bill_no and not is_sales:
+        payload["bill_no"] = bill_no
+    doc = await client.create_document(doctype, payload)
+    return await client.submit_document(doctype, doc["name"])
 
 
 def _financial_filters(

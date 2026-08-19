@@ -1,0 +1,18 @@
+# Reassert the Cloudflare-only rules periodically.
+#
+# Recreating any container with published ports makes Docker rebuild its
+# netfilter state, which clears DOCKER-USER — so a routine `docker compose up
+# -d` silently reopens the origin to the world. Verified: the rules were gone
+# after one `--force-recreate`.
+#
+# The script is idempotent, so re-running costs nothing and closes that window.
+[Unit]
+Description=Reassert Cloudflare-only rules for published web ports
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
