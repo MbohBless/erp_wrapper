@@ -165,7 +165,7 @@ platform/api   Control plane API (tenant registry, plans, provisioning, audit).
 platform/ui    Operator console — its own palette, its own /papi prefix.
 caddy/         Caddyfile (single-tenant) · Caddyfile.saas (shared plane).
 scripts/       seed_erpnext.py (demo data), backup.sh (per-site backup).
-docs/          api.md · architecture.md · deployment.md · multi-tenancy.md ·
+docs/          api.md · architecture.md · decisions.md · deployment.md · multi-tenancy.md ·
                integrations.md · coding_guidelines.md
 docker-compose.yml
 ```
@@ -182,6 +182,8 @@ docker-compose.yml
   mobile money, WhatsApp, payroll — what to build, in what order, and why
 - **[docs/deployment.md](docs/deployment.md)** — Compose services, HTTPS, backups
 - **[docs/fresh-install.md](docs/fresh-install.md)** — handing a clean instance to a client, step by step
+- **[docs/decisions.md](docs/decisions.md)** — why the system works the way it
+  does, and what was rejected on the way
 - **[docs/coding_guidelines.md](docs/coding_guidelines.md)** — backend conventions
 
 ---

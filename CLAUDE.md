@@ -25,6 +25,7 @@ header, with a separate control plane in `platform/`).
 | Tenancy, isolation, control plane, white-labelling | [docs/multi-tenancy.md](docs/multi-tenancy.md) |
 | Add-on roadmap, payment/tax/messaging integrations | [docs/integrations.md](docs/integrations.md) |
 | Original V1 product brief | [docs/system-design.md](docs/system-design.md) |
+| Why a thing works the way it does; what was rejected | [docs/decisions.md](docs/decisions.md) |
 
 The [README.md](README.md) is the top-level index and links to all of the above.
 **When you change routes, RBAC, config, or architecture, update the matching doc
