@@ -14,7 +14,9 @@ class FinStub:
         self.fy = fy or {"year_start_date": "2026-01-01", "year_end_date": "2026-12-31"}
 
     async def list_documents(self, doctype, fields=None, filters=None, limit=20, start=0, order_by=None):
-        return self.data.get(doctype, [])
+        # Honours limit/start: the repository pages through anything it sums,
+        # and a stub that ignored them would hand back a full page forever.
+        return self.data.get(doctype, [])[start : start + limit]
 
     async def get_document(self, doctype, name):
         return self.fy

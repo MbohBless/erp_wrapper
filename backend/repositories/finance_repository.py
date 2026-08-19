@@ -3,6 +3,7 @@
 All read from ERPNext (invoices, GL entries, query reports) through ERPNextClient.
 """
 
+import logging
 import re
 from datetime import date, datetime
 
@@ -46,21 +47,84 @@ def _bucket(age: int) -> str:
     return "90+"
 
 
+log = logging.getLogger("equimed.finance")
+
+
 class FinanceRepository:
+    #: Rows per request when reading a set that is going to be *summed*. Small
+    #: enough not to hand ERPNext an enormous query, large enough that ordinary
+    #: volumes finish in one round trip.
+    _PAGE = 500
+    #: Runaway guard, not a limit anyone should reach. Hitting it is logged —
+    #: see _fetch_all for why that matters more than the number itself.
+    _CEILING = 50_000
+
     def __init__(self, client: ERPNextClient) -> None:
         self.client = client
 
+    async def _fetch_all(
+        self,
+        doctype: str,
+        *,
+        fields: list[str],
+        filters: list | None = None,
+        order_by: str | None = None,
+    ) -> list[dict]:
+        """Every matching row, a page at a time.
+
+        A single capped request is the wrong shape for anything that gets
+        summed. Past the cap the total is not visibly truncated — it is simply
+        *wrong*, by an amount nobody can see, on a page whose entire job is to
+        be trusted. Receivables read low, and the rows dropped are whichever the
+        sort put last.
+
+        `name` is appended to the ordering because paging a non-total order is
+        not safe: rows that tie can be returned in a different order per
+        request, so one gets counted twice and another not at all. For a list
+        that is a display glitch; for a sum it is a wrong number.
+        """
+        order = order_by or "name asc"
+        if "name" not in order:
+            order = f"{order}, name asc"
+
+        out: list[dict] = []
+        start = 0
+        while start < self._CEILING:
+            batch = await self.client.list_documents(
+                doctype, fields=fields, filters=filters,
+                limit=self._PAGE, start=start, order_by=order,
+            )
+            out.extend(batch)
+            if len(batch) < self._PAGE:
+                return out
+            start += self._PAGE
+
+        # Reaching here means the figures below are computed on a subset. Say so
+        # loudly: a silently short total is the failure this method exists to
+        # prevent, and swallowing it here would reintroduce it one level down.
+        log.warning(
+            "finance: %s hit the %d-row ceiling; totals are computed on a "
+            "subset and will read low", doctype, self._CEILING,
+        )
+        return out
+
     # ------------------------------------------------------------ summary
     async def get_summary(self, as_of: date, limit: int = 8) -> FinanceSummary:
-        sales = await self.client.list_documents(
+        # `outstanding_amount > 0` is applied by ERPNext, not in Python below.
+        # Fetching every submitted invoice to discard the settled ones spends
+        # the budget on rows that contribute nothing — and because the sort is
+        # oldest-due-first, the ones that fell off the end were the newest,
+        # which are exactly the ones most likely to be unpaid.
+        unpaid = [["docstatus", "=", 1], ["outstanding_amount", ">", 0]]
+        sales = await self._fetch_all(
             "Sales Invoice",
             fields=["name", "customer", "outstanding_amount", "due_date"],
-            filters=[["docstatus", "=", 1]], limit=500, order_by="due_date asc",
+            filters=unpaid, order_by="due_date asc",
         )
-        purchases = await self.client.list_documents(
+        purchases = await self._fetch_all(
             "Purchase Invoice",
             fields=["name", "supplier", "outstanding_amount", "due_date"],
-            filters=[["docstatus", "=", 1]], limit=500, order_by="due_date asc",
+            filters=unpaid, order_by="due_date asc",
         )
         today = as_of.isoformat()
         r_open = [s for s in sales if _num(s.get("outstanding_amount")) > 0]
@@ -81,12 +145,12 @@ class FinanceRepository:
 
     # ------------------------------------------------ aged AR / AP ledgers
     async def _ledger(self, doctype: str, party_field: str, as_of: date) -> LedgerResult:
-        docs = await self.client.list_documents(
+        docs = await self._fetch_all(
             doctype,
             fields=["name", party_field, "posting_date", "due_date",
                     "grand_total", "outstanding_amount"],
             filters=[["docstatus", "=", 1], ["outstanding_amount", ">", 0]],
-            limit=1000, order_by="due_date asc",
+            order_by="due_date asc",
         )
         rows: list[LedgerRow] = []
         totals = AgingBuckets()
@@ -140,18 +204,22 @@ class FinanceRepository:
             filters.append(["posting_date", ">=", from_date])
         if to_date:
             filters.append(["posting_date", "<=", to_date])
-        gl = await self.client.list_documents(
+        gl = await self._fetch_all(
             "GL Entry",
             fields=["posting_date", "account", "debit", "credit", "voucher_type",
                     "voucher_no", "party", "against", "remarks"],
-            filters=filters, limit=1000, order_by="posting_date asc, creation asc",
+            filters=filters, order_by="posting_date asc, creation asc",
         )
         opening = 0.0
         if from_date:
-            prior = await self.client.list_documents(
+            # The opening balance is every prior movement on these accounts.
+            # Capped, it is wrong by whatever fell off — and because every
+            # running balance in the book below is derived from it, one short
+            # read makes the entire statement wrong rather than incomplete.
+            prior = await self._fetch_all(
                 "GL Entry", fields=["debit", "credit"],
                 filters=[["account", "in", accounts], ["is_cancelled", "=", 0],
-                         ["posting_date", "<", from_date]], limit=5000,
+                         ["posting_date", "<", from_date]],
             )
             opening = sum(_num(e.get("debit")) - _num(e.get("credit")) for e in prior)
         balance = opening
@@ -264,12 +332,11 @@ class FinanceRepository:
         the fiscal year. Returns {account_number: [m1..m12]}."""
         fy = await self.client.get_document("Fiscal Year", fiscal_year)
         start, end = str(fy.get("year_start_date")), str(fy.get("year_end_date"))
-        gl = await self.client.list_documents(
+        gl = await self._fetch_all(
             "GL Entry",
             fields=["account", "posting_date", "debit", "credit"],
             filters=[["company", "=", company], ["is_cancelled", "=", 0],
                      ["posting_date", ">=", start], ["posting_date", "<=", end]],
-            limit=100000,
         )
         out: dict[str, list[float]] = {}
         for e in gl:

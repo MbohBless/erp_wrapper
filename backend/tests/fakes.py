@@ -35,6 +35,31 @@ class FakeERPNextClient:
             elif op == "!=":
                 if dv == val:
                     return False
+            elif op == "in":
+                if dv not in (val or []):
+                    return False
+            elif op in (">", "<", ">=", "<="):
+                # Comparisons were previously ignored, which quietly made the
+                # fake *more* permissive than ERPNext: a filter like
+                # ["outstanding_amount", ">", 0] matched every row, so a settled
+                # invoice came back where the real thing excludes it — and any
+                # test relying on that filter proved nothing.
+                try:
+                    left, right = float(dv or 0), float(val or 0)
+                except (TypeError, ValueError):
+                    # Dates arrive as ISO strings. Comparing them lexically is
+                    # not a shortcut — it is why ERPNext can filter on them at
+                    # all — but coercing them to float is not, and treating the
+                    # failure as "no match" quietly drops every dated filter.
+                    left, right = str(dv or ""), str(val or "")
+                if op == ">" and not left > right:
+                    return False
+                if op == "<" and not left < right:
+                    return False
+                if op == ">=" and not left >= right:
+                    return False
+                if op == "<=" and not left <= right:
+                    return False
             elif op == "like":
                 needle = str(val).strip("%").lower()
                 if needle not in str(dv or "").lower():
