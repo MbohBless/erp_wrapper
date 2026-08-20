@@ -46,7 +46,7 @@ export default function ProductDrawer({
       </div>
 
       <DetailRow label={t("products.sku")} value={product.sku} />
-      <DetailRow label={t("products.category")} value={product.category} />
+      <DetailRow label={t("products.category")} value={product.category ?? ""} />
       <DetailRow label={t("products.unit")} value={product.unit} />
       <DetailRow label={t("products.manufacturer")} value={product.manufacturer ?? ""} />
       <DetailRow label={t("products.barcode")} value={product.barcode ?? ""} />

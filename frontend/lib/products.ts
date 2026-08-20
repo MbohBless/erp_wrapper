@@ -5,7 +5,9 @@ export type Product = {
   name: string;
   sku: string;
   barcode: string | null;
-  category: string;
+  /** ERPNext requires an item group in practice, but the API no longer
+   *  substitutes the tree root when none was chosen, so this can be null. */
+  category: string | null;
   manufacturer: string | null;
   purchase_price: number | null;
   selling_price: number | null;

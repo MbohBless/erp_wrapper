@@ -182,7 +182,11 @@ get_customer_service = erpnext_service(
     )
 )
 get_supplier_service = erpnext_service(lambda c: SupplierService(SupplierRepository(c)))
-get_product_service = erpnext_service(lambda c: ProductService(ProductRepository(c)))
+get_product_service = erpnext_service(
+    # Reference data, so a product created without a category gets a selectable
+    # one rather than the tree root ERPNext refuses.
+    lambda c: ProductService(ProductRepository(c), ReferenceService(ReferenceRepository(c)))
+)
 get_sales_service = erpnext_service(
     # Sales needs the catalogue too: every line is stamped with the product's
     # own selling price so a discount is recorded rather than inferred.

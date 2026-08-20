@@ -47,8 +47,11 @@ class CustomerService:
         if given and given not in _GROUP_ROOTS:
             return given
         if self.reference is None:
-            return given
-        return await self.reference.default_customer_group() or given
+            return None if given in _GROUP_ROOTS else given
+        # None, not the root, when nothing selectable exists. Sending a value
+        # ERPNext refuses guarantees a 417; omitting the field lets ERPNext
+        # apply its own default and the record saves.
+        return await self.reference.default_customer_group() or None
 
     async def create(self, data: CustomerCreate) -> CustomerRead:
         if await self.repo.get(data.name) is not None:

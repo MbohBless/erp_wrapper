@@ -6,7 +6,7 @@ PRODUCT = {
     "name": "Digital Thermometer",
     "sku": "THERMO-001",
     "barcode": "6001234567890",
-    "category": "All Item Groups",
+    "category": "Consumable",   # a leaf. The root is refused — see test below.
     "manufacturer": "Acme",
     "purchase_price": 1500.0,
     "selling_price": 2500.0,
@@ -39,7 +39,10 @@ def test_field_mapping_to_erpnext(client, admin_token, fake_erpnext):
     stored = fake_erpnext.store["MAP-1"]
     assert stored["item_code"] == "MAP-1"
     assert stored["item_name"] == "Digital Thermometer"
-    assert stored["item_group"] == "All Item Groups"
+    # Not the tree root. ERPNext refuses a group node on a document, so a
+    # default of "All Item Groups" was a guaranteed 417 for any caller that did
+    # not choose a category.
+    assert stored["item_group"] == "Consumable"
     assert stored["stock_uom"] == "Nos"
     assert stored["custom_barcode"] == "6001234567890"
     assert stored["custom_manufacturer"] == "Acme"

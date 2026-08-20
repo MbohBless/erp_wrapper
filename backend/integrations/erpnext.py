@@ -220,18 +220,25 @@ async def create_customer(
     client: ERPNextClient,
     *,
     customer_name: str,
-    customer_group: str = "All Customer Groups",
+    customer_group: str | None = None,
     customer_type: str = "Company",
     territory: str = "All Territories",
     tax_id: str | None = None,
 ) -> dict:
-    """Create an ERPNext Customer."""
+    """Create an ERPNext Customer.
+
+    `customer_group` defaulted to "All Customer Groups", which is the tree root
+    — a container ERPNext refuses on a document. Every caller that did not pass
+    one was therefore guaranteed a 417. Omitted now, so ERPNext applies its own
+    default; `CustomerService` substitutes a selectable group when it can.
+    """
     payload: dict[str, Any] = {
         "customer_name": customer_name,
-        "customer_group": customer_group,
         "customer_type": customer_type,
         "territory": territory,
     }
+    if customer_group:
+        payload["customer_group"] = customer_group
     if tax_id:
         payload["tax_id"] = tax_id
     return await client.create_document("Customer", payload)

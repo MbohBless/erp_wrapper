@@ -38,7 +38,7 @@ def _from_erpnext(doc: dict) -> ProductRead:
         id=doc.get("name"),
         name=doc.get("item_name") or doc.get("name"),
         sku=doc.get("item_code") or doc.get("name"),
-        category=doc.get("item_group") or "All Item Groups",
+        category=doc.get("item_group") or None,
         unit=doc.get("stock_uom") or "Nos",
         track_batches=bool(doc.get("has_batch_no")),
         image=doc.get("image") or None,

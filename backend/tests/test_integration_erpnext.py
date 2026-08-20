@@ -21,9 +21,17 @@ async def test_create_customer(erp):
     doc = await create_customer(erp, customer_name="Douala Clinic", tax_id="M123")
     assert doc["name"] == "Douala Clinic"
     assert doc["doctype"] == "Customer"
-    assert doc["customer_group"] == "All Customer Groups"
     assert doc["customer_type"] == "Company"
     assert doc["tax_id"] == "M123"
+    # No customer_group at all when none was chosen. It used to default to the
+    # tree root, which ERPNext refuses on a document — so every caller that did
+    # not pass one was guaranteed a 417. Omitted, ERPNext applies its own.
+    assert "customer_group" not in doc
+
+    chosen = await create_customer(
+        erp, customer_name="CHU Yaoundé", customer_group="Hospital"
+    )
+    assert chosen["customer_group"] == "Hospital"
 
 
 async def test_create_invoice_submits(erp):

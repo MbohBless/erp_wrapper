@@ -303,6 +303,27 @@ watch the test go red, restore. That caught one bad test of its own — with
 `start` ignored, a paging test looped forever instead of failing, and a test that
 hangs on the bug it is meant to catch reports nothing. It is bounded now.
 
+**The fake now refuses what ERPNext refuses.** Rules encoded, each standing for
+a defect that shipped green: list queries return no child table, `posting_date`
+is ignored without `set_posting_time`, tree roots cannot be selected, mandatory
+fields and child rows are enforced, and a submitted document cannot be edited.
+An unimplemented filter operator raises rather than matching every row.
+
+Turning these on failed 29 tests, and every one traced to a **live defect**
+rather than an over-strict rule: `ProductBase.category` still defaulted to
+`"All Item Groups"`, and `integrations.create_customer` defaulted
+`customer_group` to `"All Customer Groups"` — both tree roots, so any caller
+that did not choose one was guaranteed a 417. The product test fixture had the
+root written into it, and one assertion required it. The tests were holding the
+bug in place.
+
+Where no selectable group exists, both services now send **nothing** rather than
+the root; ERPNext applies its own default and the record saves.
+
+What this cannot do is find the *next* trap. It encodes rules already paid for,
+so it is a regression net, not a discovery tool — which is the argument for a
+real ERPNext in CI, still outstanding.
+
 **A green suite is necessary, not sufficient.** Every ERPNext-facing change here
 was exercised against the live instance. Where that meant writing, a **draft
 document** was used and deleted: a draft posts no GL or stock entries, so the
@@ -340,4 +361,5 @@ from 8 to 140 in a day. That shaped the process as much as the design.
 | RBAC matrix is product-wide | Per-tenant permissions is a feature, not a config line. Only one live tenant. |
 | `custom_selling_price` and `Item Price` disagree on six items | Our invoices read the product directly, so they are unaffected; anything raised in the ERPNext desk would price those at zero. |
 | No draft stage for invoices | Every invoice submits on save, so the first typo requires a cancellation. A draft stage would remove most amendments entirely. |
+| No CI job against a real ERPNext | The strict fake encodes known traps only. Finding the next one needs the real thing — a scheduled job, not per-PR: site creation is 10–20 minutes. |
 | Ageing does not split partial payments across buckets | ERPNext's report does; ours buckets each invoice wholly by due date. The two agree on totals today because there are few partial payments. |

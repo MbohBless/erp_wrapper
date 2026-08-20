@@ -11,7 +11,11 @@ class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=140)  # -> item_name
     sku: str = Field(min_length=1, max_length=140)  # -> item_code (identifier)
     barcode: str | None = Field(default=None, max_length=140)
-    category: str = "All Item Groups"  # -> item_group
+    # NOT "All Item Groups". That is the tree root, and ERPNext refuses a group
+    # node on a document — which is why twelve items ended up filed under a
+    # category nothing can group by. None means "pick a selectable one for me";
+    # see ProductService.
+    category: str | None = None  # -> item_group
     manufacturer: str | None = Field(default=None, max_length=140)
     purchase_price: float | None = Field(default=None, ge=0)
     selling_price: float | None = Field(default=None, ge=0)

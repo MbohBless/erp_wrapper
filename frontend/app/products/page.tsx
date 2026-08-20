@@ -200,7 +200,7 @@ function ProductsContent() {
                   >
                     <td className="pl-5 py-3 font-medium">{p.name}</td>
                     <td className="py-3 muted">{p.sku}</td>
-                    <td className="py-3 muted">{p.category}</td>
+                    <td className="py-3 muted">{p.category ?? "—"}</td>
                     <td className="py-3 muted">{p.unit}</td>
                     <td className="py-3 pr-5 text-right font-semibold">
                       {p.selling_price != null ? xaf(p.selling_price) : "—"}

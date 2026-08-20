@@ -66,8 +66,105 @@ async def test_documents_of_another_doctype_are_not_returned():
     """Without this a repository writing to the wrong DocType still reads back
     what it expects, and the suite cannot tell two DocTypes apart."""
     fake = FakeERPNextClient()
-    await fake.create_document("Sales Invoice", {"name": "SI-1"})
-    await fake.create_document("Purchase Invoice", {"name": "PI-1"})
+    # Deliberately doctypes with no mandatory-field rules: this is about
+    # separation, and a half-built Sales Invoice is now refused on its own
+    # merits, which is the point of the rest of this file.
+    await fake.create_document("Widget", {"name": "W-1"})
+    await fake.create_document("Gadget", {"name": "G-1"})
 
-    assert [d["name"] for d in await fake.list_documents("Sales Invoice")] == ["SI-1"]
-    assert [d["name"] for d in await fake.list_documents("Purchase Invoice")] == ["PI-1"]
+    assert [d["name"] for d in await fake.list_documents("Widget")] == ["W-1"]
+    assert [d["name"] for d in await fake.list_documents("Gadget")] == ["G-1"]
+
+
+# --- The rules the fake now enforces, because ERPNext does ---------------
+#
+# Each of these stands for a defect that shipped green. The fake accepting what
+# ERPNext refuses is not a missing test — it is a passing test that proves
+# nothing, which is worse, because it reads as coverage.
+
+from datetime import date
+
+from integrations.erpnext import ERPNextError
+
+
+async def test_a_list_query_returns_no_child_table():
+    """`GET /api/resource/{doctype}` returns parent fields only. Handing back
+    `items` made invoice lines look present in tests while the real list gave
+    nothing — and the totals, which live on the parent, kept looking right."""
+    fake = FakeERPNextClient()
+    await fake.create_document("Sales Invoice", {
+        "name": "SI-1", "customer": "CHU", "grand_total": 5000,
+        "items": [{"item_code": "THERMO-001", "qty": 2, "rate": 2500}],
+    })
+
+    listed = (await fake.list_documents("Sales Invoice"))[0]
+    assert "items" not in listed
+    assert listed["grand_total"] == 5000          # the parent field is there
+
+    fetched = await fake.get_document("Sales Invoice", "SI-1")
+    assert len(fetched["items"]) == 1              # by id, the lines are
+
+
+async def test_a_submitted_document_cannot_be_edited():
+    """Which is why correcting one is cancel-then-amend."""
+    fake = FakeERPNextClient()
+    await fake.create_document("Sales Invoice", {"name": "SI-1", "customer": "CHU",
+                                                 "items": [{"item_code": "X"}]})
+    await fake.submit_document("Sales Invoice", "SI-1")
+
+    with pytest.raises(ERPNextError, match="submitted"):
+        await fake.update_document("Sales Invoice", "SI-1", {"customer": "Someone else"})
+
+
+async def test_posting_date_is_ignored_without_set_posting_time():
+    """The trap that silently posted backdated invoices to today."""
+    fake = FakeERPNextClient()
+    await fake.create_document("Sales Invoice", {
+        "name": "SI-1", "customer": "CHU", "items": [{"item_code": "X"}],
+        "posting_date": "2026-03-04"})
+    assert (await fake.get_document("Sales Invoice", "SI-1"))["posting_date"] \
+        == date.today().isoformat()
+
+    await fake.create_document("Sales Invoice", {
+        "name": "SI-2", "customer": "CHU", "items": [{"item_code": "X"}],
+        "posting_date": "2026-03-04", "set_posting_time": 1})
+    assert (await fake.get_document("Sales Invoice", "SI-2"))["posting_date"] \
+        == "2026-03-04"
+
+
+async def test_a_tree_root_cannot_be_selected():
+    """"All Customer Groups" and friends are containers. Defaulting a field to
+    one broke customer creation and filed twelve items under a category nothing
+    can group by."""
+    fake = FakeERPNextClient()
+    with pytest.raises(ERPNextError, match="group node"):
+        await fake.create_document("Customer", {"customer_name": "CHU",
+                                                "customer_group": "All Customer Groups"})
+    with pytest.raises(ERPNextError, match="group node"):
+        await fake.create_document("Item", {"item_code": "X",
+                                            "item_group": "All Item Groups"})
+
+    # Creating the container itself is legitimate — ERPNext ships these records.
+    await fake.create_document("Item Group", {"name": "All Item Groups", "is_group": 1})
+
+
+async def test_a_document_missing_a_mandatory_field_is_refused():
+    fake = FakeERPNextClient()
+    with pytest.raises(ERPNextError, match="customer is mandatory"):
+        await fake.create_document("Sales Invoice", {"items": [{"item_code": "X"}]})
+    with pytest.raises(ERPNextError, match="items is mandatory"):
+        await fake.create_document("Sales Invoice", {"customer": "CHU"})
+
+
+async def test_a_mandatory_child_row_must_be_complete():
+    """A Maintenance Visit needs a `purposes` row carrying `service_person` and
+    `work_done`. An empty row saved happily here and failed against every real
+    instance — maintenance tickets could not be created at all."""
+    fake = FakeERPNextClient()
+    with pytest.raises(ERPNextError, match="missing service_person"):
+        await fake.create_document("Maintenance Visit", {
+            "customer": "CHU", "purposes": [{"work_done": "Replaced the pump"}]})
+
+    await fake.create_document("Maintenance Visit", {
+        "customer": "CHU",
+        "purposes": [{"service_person": "Eng. Ngassa", "work_done": "Replaced the pump"}]})

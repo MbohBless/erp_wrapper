@@ -23,6 +23,21 @@ class ReferenceService:
             uoms=await self.repo.uoms(),
         )
 
+    async def default_item_group(self) -> str | None:
+        """A selectable item category, for when a caller supplies none.
+
+        Same reasoning as `default_customer_group`: the tree root looks
+        selectable and never is, so a product created without a category would
+        otherwise be refused over a field the user never chose.
+        """
+        groups = await self.repo.item_groups()
+        if not groups:
+            return None
+        for preferred in ("Consumable", "Products"):
+            if preferred in groups:
+                return preferred
+        return groups[0]
+
     async def default_customer_group(self) -> str | None:
         """A selectable customer group, preferring the conventional one.
 
