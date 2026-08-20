@@ -64,6 +64,19 @@ class FakeERPNextClient:
                 needle = str(val).strip("%").lower()
                 if needle not in str(dv or "").lower():
                     return False
+            else:
+                # Fail closed. An operator this fake does not implement used to
+                # fall through and match every row, so a test exercising that
+                # filter passed while proving nothing — which is exactly how
+                # three filters the repositories already depended on went
+                # unverified. A fake that is more permissive than the thing it
+                # stands in for is worse than no fake: it converts a real
+                # refusal into a green test.
+                raise AssertionError(
+                    f"FakeERPNextClient has no {op!r} filter operator "
+                    f"(filtering {field!r}). Implement it here to match what "
+                    "ERPNext does, rather than letting it match everything."
+                )
         return True
 
     async def list_documents(

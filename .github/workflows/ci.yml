@@ -1,0 +1,81 @@
+# Everything the project already asks for, run automatically.
+#
+# CLAUDE.md's expectations are: pytest green in backend/ AND platform/api/, and
+# `npm run build` clean in frontend/ AND platform/ui/. All four were run by hand
+# until this file existed, which meant they were run when someone remembered.
+#
+# Python versions match the Dockerfiles, not whatever is newest. Testing on a
+# runtime the product does not ship is a gap of its own.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  # A newer push makes an in-flight run for the same ref pointless.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"        # backend/Dockerfile
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+        working-directory: backend
+      - run: python -m pytest -q
+        working-directory: backend
+
+  platform-api:
+    name: control-plane tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"        # platform/api/Dockerfile
+          cache: pip
+          cache-dependency-path: platform/api/requirements.txt
+      - run: pip install -r requirements.txt
+        working-directory: platform/api
+      - run: python -m pytest -q
+        working-directory: platform/api
+
+  frontend:
+    name: frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"            # frontend/Dockerfile
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      # `next build` type-checks as well as compiles, which is the point: a type
+      # error here is a page that would 500 in production.
+      - run: npm run build
+        working-directory: frontend
+
+  platform-ui:
+    name: operator console build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"            # platform/ui/Dockerfile
+          cache: npm
+          cache-dependency-path: platform/ui/package-lock.json
+      - run: npm ci
+        working-directory: platform/ui
+      - run: npm run build
+        working-directory: platform/ui
