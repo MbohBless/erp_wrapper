@@ -1,0 +1,121 @@
+# Everything that differs between one client's deployment and the next.
+#
+#   ./scripts/provision.py clients/example.yml
+#
+# Copy this per client, commit it (there are no secrets in here — see below),
+# and it becomes the record of what that deployment is. Provisioning is
+# idempotent, so re-running after a failure resumes rather than restarts.
+#
+# NO PASSWORDS OR KEYS LIVE IN THIS FILE. Provisioning generates them, writes
+# them to .env with mode 600, and prints them once. A config file with
+# credentials in it is a config file that ends up in a repository.
+
+site:
+  # The domain the app is served on. Used for CORS, Caddy and the health check
+  # the watchdog polls.
+  domain: app.example.com
+  # ERPNext's internal site name. Never user-visible; must be a valid hostname.
+  erpnext_site: example.local
+
+company:
+  # Prints on invoices. This is ERPNext business data, not the product name —
+  # see `brand` below for that.
+  name: Example Medical Supplies Sarl
+
+  # READ THIS ONE. ERPNext suffixes the abbreviation onto every account,
+  # warehouse and cost-centre name it creates — roughly 1,400 of them — and the
+  # field is `set_only_once`. It cannot be changed afterwards; the only fix is
+  # to rebuild the site from scratch.
+  #
+  # ERPNext derives it from the company name if you let it ("Quality BioMedicals
+  # Sarl" gives QBS, "Quality Biomedicals" gives QB). Provisioning refuses to
+  # run without it, deliberately, so the decision is made here and reviewed
+  # rather than tabbed past in a wizard.
+  abbrev: EMS
+
+  country: Cameroon
+  timezone: Africa/Douala
+  currency: XAF
+
+  # Must match a chart ERPNext ships for the country. SYSCOHADA is the OHADA
+  # standard used across francophone West and Central Africa.
+  chart_of_accounts: SYSCOHADA
+
+  # Postings outside an active fiscal year are refused, and a fresh site has
+  # only the year created here — which is why opening balances have to post on
+  # the cutover date rather than their original one.
+  fiscal_year_start: "2026-01-01"
+  fiscal_year_end: "2026-12-31"
+
+# The ERPNext desk Administrator. Rarely used once the app is running; keep the
+# password somewhere safe anyway, because a site rebuild is the alternative.
+erpnext_admin:
+  email: admin@example.com
+  full_name: Administrator
+
+# The account the *application* authenticates to ERPNext as.
+#
+# Deliberately not Administrator and never a person's login. Whoever owns this
+# key owns every document the app creates in ERPNext's audit trail, and
+# disabling that human — or trimming their roles — stops the integration dead.
+integration_user:
+  email: equimed-integration@example.com
+  full_name: EquiMed Integration
+  roles:
+    - System Manager
+    - Accounts Manager
+    - Stock Manager
+    - Sales Manager
+    - Purchase Manager
+
+# The first application user. Everyone else is created from Settings → Users.
+app_admin:
+  email: admin@example.com
+  full_name: Administrator
+
+# The product's identity for this client. White-labelled, so this is what the
+# customer sees; the ERPNext Company above is what their invoices say.
+brand:
+  name: EquiMed
+  short_name: EquiMed
+  tagline: Distribution Suite
+
+# Roles this workspace does not hand out. The role keeps its permissions and its
+# tests — retiring it only means nobody can be assigned it — so re-enabling one
+# is an edit here and a backend restart.
+#
+# Administrator can never be retired.
+disabled_roles: []
+# disabled_roles: [Sales]     # e.g. a workspace whose accountant raises invoices
+
+# Master data the business is organised around. Created as *leaf* nodes:
+# ERPNext refuses a group node on a transaction, so a value created as a group
+# looks selectable in every picker and fails at save.
+taxonomy:
+  customer_groups:
+    - Hospital
+    - Health Center
+    - Central Labs
+    - NGOs
+    - Individual
+    - Sub Distributor
+
+  # The dashboard groups revenue by these, and every product must belong to one.
+  # Two is usually right for a distributor: the devices, and what feeds them.
+  item_groups:
+    - Consumable
+    - Equipment
+
+  territories:
+    - Cameroon
+
+# Where stock lives. A distributor generally wants one: devices arrive finished
+# and leave finished, and extra warehouses only give people ways to lose track
+# of the same box. ERPNext creates several by default; the ones not listed here
+# are disabled, never deleted, because stock ledger entries reference them
+# forever.
+warehouse: Finished Goods
+
+# Optional. Slack or Discord webhook the watchdog posts to when the service
+# stops answering. Left empty, the watchdog runs and stays silent.
+alert_webhook_url: ""

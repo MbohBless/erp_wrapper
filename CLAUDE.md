@@ -110,6 +110,9 @@ pip install -r requirements.txt && pytest    # 34 tests
 uvicorn main:app --reload --port 8100
 cd platform/ui && npm install && npm run dev # :3100
 
+# Provision a new client from one config file (see clients/example.yml)
+./scripts/provision.py clients/<name>.yml    # --dry-run to validate only
+
 # Full stack
 docker compose up -d --build                 # single-tenant
 docker compose --profile saas up -d --build  # SaaS plane (see docs/deployment.md)

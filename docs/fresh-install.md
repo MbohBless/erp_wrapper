@@ -8,6 +8,30 @@ accounts.
 
 ---
 
+## The short version
+
+```bash
+cp clients/example.yml clients/acme.yml     # edit it — see the comments
+./scripts/provision.py clients/acme.yml
+```
+
+That runs everything below, including the two steps that used to need a person
+in a browser: the ERPNext setup wizard and generating API credentials. It is
+idempotent, so a failure part-way is resumed with `--from N` rather than
+restarted; `--dry-run` validates the config and stops.
+
+Secrets are generated, written to `.env` with mode 600, and printed once. They
+are never read from the config, which is why the config can be committed.
+
+What is still by hand afterwards: branding (Settings → Branding, since it wants
+a logo file), and opening balances if the client is carrying figures over.
+
+The rest of this page is the manual path — worth reading once, because it says
+*why* each step exists, and it is what to fall back on when provisioning fails
+somewhere new.
+
+---
+
 ## 0. Decide these before you start
 
 Two of them can never be changed afterwards. Get them right the first time.

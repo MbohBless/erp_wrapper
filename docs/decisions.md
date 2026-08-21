@@ -353,6 +353,49 @@ from 8 to 140 in a day. That shaped the process as much as the design.
 
 ---
 
+## 10. A client's deployment is described by one file, not a runbook
+
+**Decision.** `clients/<name>.yml` holds everything that differs between one
+client and the next; `scripts/provision.py` reads it and stands the deployment
+up. Secrets are generated, written to `.env`, and printed once — never read from
+the config, so the config is committed.
+
+**Constraint that made it possible.** Both steps that seemed to require a person
+in a browser turned out to be whitelisted methods:
+`erpnext.setup.setup_wizard.setup_wizard.setup_complete(args)` drives the wizard
+from a payload, and `frappe.core.doctype.user.user.generate_keys(user)` issues
+API credentials. Verified present before any of this was written.
+
+**The abbreviation is why the config file earns its keep.** ERPNext derives it
+from the company name, suffixes it onto ~1,400 account names, and the field is
+`set_only_once` — a deployment that guessed wrong is rebuilt, not corrected. In
+a wizard it is a field people tab past. Provisioning **refuses to run** without
+it, and refuses a value that is not 1–10 alphanumerics.
+
+**The app authenticates as a service account.** The first live deployment
+authenticated to ERPNext as a *person's* login, which meant every document the
+app created was owned by that human in ERPNext's audit trail, and disabling them
+would have stopped the integration dead. Provisioning creates a named
+integration user instead. The API secret is returned exactly once at generation,
+so it is captured in the same step; there is no reading it back, only replacing
+it.
+
+**Idempotent throughout**, because a site build takes ten minutes with a
+1,400-account chart in the middle and partial failures are the normal case.
+Existing secrets are never regenerated — rotating `JWT_SECRET_KEY` invalidates
+every session and rotating `SECRET_ENCRYPTION_KEY` makes stored credentials
+undecryptable, neither of which belongs in a step people re-run to get past a
+failure.
+
+**What this does not solve.** The RBAC matrix is still product-wide. "The
+accountant raises invoices and cannot see purchases" is compiled in, so a client
+who wants otherwise needs code, not config. Everything else that felt
+client-specific turned out to be data or a generic fallback — the warehouse
+preselect prefers "Finished Goods" but falls back to the only warehouse, and the
+category and customer-group pickers read master data.
+
+---
+
 ## Open items
 
 | Item | Why it is not done |

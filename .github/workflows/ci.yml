@@ -33,6 +33,20 @@ jobs:
       - run: python -m pytest -q
         working-directory: backend
 
+  provisioning:
+    name: provisioning script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest pyyaml
+      # Config validation and .env editing. Neither is exercised by running the
+      # provisioner — that takes ten minutes and ends with a live site — so the
+      # parts that decide whether it *should* run are covered here.
+      - run: python -m pytest scripts/tests -q
+
   platform-api:
     name: control-plane tests
     runs-on: ubuntu-latest
