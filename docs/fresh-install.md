@@ -10,6 +10,22 @@ accounts.
 
 ## The short version
 
+> ### This is for a NEW deployment. Never point it at a live one.
+>
+> `provision.py` rewrites `.env`, rebuilds the containers and **reissues the
+> ERPNext API credentials**. Aimed at an instance a client is using, that stops
+> them working mid-sentence, and the cause is several steps behind the symptom.
+>
+> It refuses by itself: step 2 counts the sales invoices on the site and stops
+> if there are any, and stops if this directory is already provisioned as a
+> different site. `--force` overrides both and should be treated as "I have a
+> backup and I intend to destroy this".
+>
+> **A second client gets its own checkout, its own directory and its own
+> `.env`** — not a second config file in the first client's working tree. The
+> live instance for Quality Biomedicals lives in `/opt/equimed` on its own host
+> and nothing here should ever run against it.
+
 ```bash
 cp clients/example.yml clients/acme.yml     # edit it — see the comments
 ./scripts/provision.py clients/acme.yml

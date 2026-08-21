@@ -176,6 +176,11 @@ Once a client is entering data, treat the instance as production:
   responds. A failed `git pull` leaves the previous build serving happily.
 - **Never copy files to the server.** Commit, push, then pull. Untracked files in
   the working tree abort `git pull`, and the deploy silently does not happen.
+- **`scripts/provision.py` is for a new deployment, never a live one.** It
+  rewrites `.env`, rebuilds the containers and reissues the ERPNext API
+  credentials. It refuses when the site already holds sales invoices, and a
+  second client gets its own checkout and `.env` rather than a second config in
+  the first client's working tree.
 - Warn before deploying; a rebuild is ~30s of 502 for whoever is mid-form.
 
 ## Gotchas that cost real time

@@ -6,6 +6,15 @@
 # and it becomes the record of what that deployment is. Provisioning is
 # idempotent, so re-running after a failure resumes rather than restarts.
 #
+# FOR A NEW DEPLOYMENT ONLY. Provisioning rewrites .env, rebuilds the
+# containers and reissues the ERPNext API credentials — on an instance a client
+# is using, that stops them working mid-sentence. It refuses to run against a
+# site that already holds sales invoices, and against a directory already
+# provisioned as a different site.
+#
+# A second client gets its own checkout and its own directory. Two deployments
+# do not share a working tree: there is one .env, and it describes one of them.
+#
 # NO PASSWORDS OR KEYS LIVE IN THIS FILE. Provisioning generates them, writes
 # them to .env with mode 600, and prints them once. A config file with
 # credentials in it is a config file that ends up in a repository.

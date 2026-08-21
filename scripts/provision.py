@@ -16,6 +16,14 @@ when you already know which step failed.
 
 Secrets are generated here, written to .env with mode 600, and printed once.
 They are never read from the config file, so the config can be committed.
+
+FOR A NEW DEPLOYMENT ONLY. This rewrites .env, rebuilds the containers and
+reissues the ERPNext API credentials; pointed at an instance a client is using,
+it stops them working mid-sentence. Step 2 refuses when the site already holds
+sales invoices, or when this directory is provisioned as a different site.
+`--force` overrides that and means "I have a backup and I intend to destroy
+this". A second client gets its own checkout and its own .env — two deployments
+do not share a working tree.
 """
 
 from __future__ import annotations
@@ -188,7 +196,70 @@ def step_1_prerequisites(cfg, state):
     ok(f"docker compose {version}")
 
 
-def step_2_env(cfg, state):
+def existing_deployment_conflict(cfg, env: dict) -> str | None:
+    """Why this config must not be applied to what is already here, or None."""
+    site = env.get("SITE_NAME", "")
+    if site and site != cfg["site"]["erpnext_site"]:
+        return (
+            f"this directory is already provisioned as {site!r}, but the config "
+            f"asks for {cfg['site']['erpnext_site']!r}. Two deployments do not "
+            "share a working tree — check the project out again elsewhere for "
+            "the second client."
+        )
+    return None
+
+
+def step_2_not_a_live_instance(cfg, state):
+    """Refuse to run over a deployment that is in use.
+
+    Provisioning is for a site nobody has typed into yet. Pointed at a running
+    one it rewrites .env, rebuilds the containers and reissues the ERPNext API
+    credentials — and a client entering invoices simply stops being able to,
+    with the cause several steps behind the symptom.
+
+    The test is for *data*, not for configuration. A half-built site is exactly
+    what this script exists to finish; a site holding a client's invoices is one
+    nobody should re-provision, and the difference between them is whether
+    anyone has used it.
+    """
+    env = env_read()
+    conflict = existing_deployment_conflict(cfg, env)
+    if conflict:
+        die(conflict) if not state.get("force") else warn(f"--force: {conflict}")
+
+    running = run(["docker", "compose", "ps", "--format", "{{.Service}}"],
+                  capture=True, check=False).split()
+    if "erpnext-backend" not in running:
+        ok("nothing running here — this is a fresh install")
+        return
+
+    out = run(["docker", "compose", "exec", "-T", "erpnext-backend", "bench",
+               "--site", cfg["site"]["erpnext_site"], "execute",
+               "frappe.client.get_count", "--kwargs",
+               "{'doctype': 'Sales Invoice'}"], capture=True, check=False)
+    digits = re.findall(r"\d+", out or "")
+    invoices = int(digits[-1]) if digits else 0
+
+    if invoices > 0:
+        message = (
+            f"{cfg['site']['erpnext_site']} already holds {invoices} sales "
+            "invoice(s) — this is a live deployment.\n"
+            "    Provisioning rewrites .env, rebuilds the containers and "
+            "reissues the ERPNext API credentials. On an instance somebody is "
+            "using, that stops them working mid-sentence.\n"
+            "    To set up another client, check the project out in a separate "
+            "directory with its own .env.\n"
+            "    If you truly mean to overwrite this one: back it up first "
+            "(scripts/backup-remote.sh --force), then pass --force."
+        )
+        if not state.get("force"):
+            die(message)
+        warn("--force over a site holding data. The backup is the only way back.")
+    else:
+        ok("site holds no business data — safe to provision")
+
+
+def step_3_env(cfg, state):
     """Write .env, generating any secret that is not already there.
 
     Existing secrets are never regenerated. Rotating JWT_SECRET_KEY invalidates
@@ -248,13 +319,13 @@ def step_2_env(cfg, state):
         ok(f"company abbreviation fixed as {company['abbrev']} — set_only_once")
 
 
-def step_3_stack(cfg, state):
+def step_4_stack(cfg, state):
     print(f"{DIM}  building and starting; a first run pulls several GB{OFF}")
     run(["docker", "compose", "up", "-d", "--build"])
     ok("containers up")
 
 
-def step_4_wait_for_site(cfg, state):
+def step_5_wait_for_site(cfg, state):
     """The one-shot site creator must finish before anything can talk to it.
 
     `-a` is load-bearing: `docker compose ps` lists only running containers, so
@@ -302,7 +373,7 @@ def _bench(script: Path, site: str, payload: Path | None = None) -> str:
     return proc.stdout
 
 
-def step_5_bootstrap_erpnext(cfg, state):
+def step_6_bootstrap_erpnext(cfg, state):
     """Setup wizard, taxonomy and API credentials — the browser steps."""
     payload = dict(cfg)
     payload["erpnext_admin"] = dict(cfg["erpnext_admin"])
@@ -337,7 +408,7 @@ def step_5_bootstrap_erpnext(cfg, state):
        f"({result.get('abbr')}), API credentials written to .env")
 
 
-def step_6_company_accounts(cfg, state):
+def step_7_company_accounts(cfg, state):
     """The wizard leaves default accounts unset or matched by number prefix —
     on this project's first site the receivable control came out as an
     accrued-interest account — and the company cannot post until they are
@@ -351,7 +422,7 @@ def step_6_company_accounts(cfg, state):
         ok("company default accounts configured")
 
 
-def step_7_custom_fields(cfg, state):
+def step_8_custom_fields(cfg, state):
     """ERPNext does not reject an unknown field, it drops it. Without these the
     app saves customers with no phone number, and commissioned sales with the
     flag silently gone, and reports nothing wrong."""
@@ -364,12 +435,12 @@ def step_7_custom_fields(cfg, state):
         ok("custom fields installed")
 
 
-def step_8_backend(cfg, state):
+def step_9_backend(cfg, state):
     run(["docker", "compose", "up", "-d", "backend", "frontend"])
     ok("backend restarted with the ERPNext credentials")
 
 
-def step_9_verify(cfg, state):
+def step_10_verify(cfg, state):
     domain = cfg["site"]["domain"]
     for _ in range(30):
         out = run(["docker", "compose", "exec", "-T", "backend",
@@ -394,14 +465,16 @@ def step_9_verify(cfg, state):
 
 STEPS = [
     ("prerequisites", step_1_prerequisites),
-    ("configuration (.env)", step_2_env),
-    ("build and start the stack", step_3_stack),
-    ("wait for the ERPNext site", step_4_wait_for_site),
-    ("ERPNext wizard, taxonomy, API keys", step_5_bootstrap_erpnext),
-    ("company default accounts", step_6_company_accounts),
-    ("custom fields", step_7_custom_fields),
-    ("restart the app", step_8_backend),
-    ("verify", step_9_verify),
+    # Before anything is written. See step_2_not_a_live_instance.
+    ("check this is not a live instance", step_2_not_a_live_instance),
+    ("configuration (.env)", step_3_env),
+    ("build and start the stack", step_4_stack),
+    ("wait for the ERPNext site", step_5_wait_for_site),
+    ("ERPNext wizard, taxonomy, API keys", step_6_bootstrap_erpnext),
+    ("company default accounts", step_7_company_accounts),
+    ("custom fields", step_8_custom_fields),
+    ("restart the app", step_9_backend),
+    ("verify", step_10_verify),
 ]
 
 
@@ -412,6 +485,9 @@ def main():
                         help="resume from this step (1-based)")
     parser.add_argument("--dry-run", action="store_true",
                         help="validate the config and print the plan")
+    parser.add_argument("--force", action="store_true",
+                        help="provision over a deployment that already holds "
+                             "data. Back it up first — there is no other way back.")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -431,7 +507,7 @@ def main():
         ok("dry run — nothing was changed")
         return
 
-    state: dict = {}
+    state: dict = {"force": args.force}
     for i, (name, fn) in enumerate(STEPS, 1):
         if i < args.start:
             continue

@@ -387,6 +387,18 @@ every session and rotating `SECRET_ENCRYPTION_KEY` makes stored credentials
 undecryptable, neither of which belongs in a step people re-run to get past a
 failure.
 
+**It refuses to run over a live instance.** Provisioning rewrites `.env`,
+rebuilds the containers and reissues the ERPNext API credentials — all
+reasonable on a site nobody has used, all catastrophic on one a client is
+entering invoices into, and the symptom would appear several steps from the
+cause. So the check is for *data*, not for configuration: a half-built site is
+exactly what the script exists to finish, while a site holding sales invoices is
+one nobody should re-provision, and the difference between them is whether
+anyone has typed into it. It also refuses when the working tree is already
+provisioned as a different site, because two deployments cannot share one
+`.env`. `--force` overrides both, and reads as "I have a backup and I intend to
+destroy this".
+
 **What this does not solve.** The RBAC matrix is still product-wide. "The
 accountant raises invoices and cannot see purchases" is compiled in, so a client
 who wants otherwise needs code, not config. Everything else that felt

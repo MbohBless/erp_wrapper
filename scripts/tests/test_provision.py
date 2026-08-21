@@ -156,3 +156,36 @@ def test_generated_passwords_avoid_characters_that_get_misread(env):
         pw = provision.password()
         assert len(pw) == 16
         assert not set(pw) & set("lI1O0")
+
+
+# --- Not over a live instance --------------------------------------------
+#
+# The provisioner rewrites .env, rebuilds the containers and reissues the
+# ERPNext API credentials. Aimed at a deployment someone is using, that stops
+# them working mid-sentence, with the cause several steps behind the symptom.
+
+
+def cfg_for(site="acme.local"):
+    return {"site": {"erpnext_site": site, "domain": "app.acme.com"}}
+
+
+def test_a_different_site_in_this_directory_is_a_conflict():
+    """Two clients do not share a working tree. Running the second config here
+    would point the running stack at a site it was not built for."""
+    reason = provision.existing_deployment_conflict(
+        cfg_for("acme.local"), {"SITE_NAME": "qbmedicals.local"}
+    )
+    assert reason and "qbmedicals.local" in reason and "acme.local" in reason
+
+
+def test_the_same_site_is_not_a_conflict():
+    """Re-running against the deployment this directory already describes is
+    the resume case, which is supported."""
+    assert provision.existing_deployment_conflict(
+        cfg_for("acme.local"), {"SITE_NAME": "acme.local"}
+    ) is None
+
+
+def test_an_empty_env_is_not_a_conflict():
+    """A first run has nothing to conflict with."""
+    assert provision.existing_deployment_conflict(cfg_for(), {}) is None
