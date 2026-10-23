@@ -11,6 +11,12 @@ bcrypt==4.0.1
 PyJWT==2.10.1
 reportlab==4.2.5
 pyHanko==0.25.1
-Pillow==10.4.0
+# 13.x, not 10.4.0. ReportLab decodes branding logos through Pillow
+# (utils/pdf_report._logo_reader), so a tenant's uploaded image reaches this
+# decoder — CVE-2026-112403 (JPEG heap corruption) sat on that path. Verified
+# against reportlab 4.2.5 by tests/test_pdf_logo.py, which renders a real PNG
+# and JPEG and asserts the image actually lands on the page; both call sites
+# swallow exceptions, so a decoder that stops working is otherwise silent.
+Pillow==13.0.0
 pytest==8.3.4
 pytest-asyncio==0.24.0
