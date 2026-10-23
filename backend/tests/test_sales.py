@@ -479,3 +479,135 @@ def test_the_probe_row_is_what_reveals_a_next_page(client, admin_token, fake_erp
     # Four invoices, pages of three: the fourth row is the signal.
     assert len(fetch(4)) == 4          # asked for size+1, got it -> more exists
     assert len(fetch(4, start=3)) == 1  # last page returns fewer than asked
+
+
+# --- Which warehouse a stock-updating sale ships from ---------------------
+#
+# Reproduced against a real ERPNext before any of this was written: 100 units
+# received into "Finished Goods", then an invoice with the box ticked, and
+#
+#   417 NegativeStockError: 10.0 units of REPRO-STOCK-01 needed in
+#   Warehouse Stores - LTM to complete this transaction
+#
+# Told nothing, ERPNext takes the warehouse from the *item's* default, which it
+# copies from Stock Settings when the item is created — "Stores" on a fresh
+# site. So the app receives goods into one warehouse and sells them out of
+# another, and the user is told the stock is missing from a warehouse they have
+# never picked. It reads exactly like "ticking the box does nothing".
+#
+# These assert on the payload sent to ERPNext, not on the response: the
+# response looks correct either way.
+
+
+def _warehouse(client, token, name, **extra):
+    return client.post(
+        "/inventory/warehouses",
+        json={"name": name, "is_group": False, **extra},
+        headers=auth_header(token),
+    )
+
+
+def test_a_stock_updating_sale_names_the_warehouse(client, admin_token, fake_erpnext):
+    _warehouse(client, admin_token, "Stores")
+    _warehouse(client, admin_token, "Finished Goods")
+
+    created = _create(client, admin_token, update_stock=True).json()
+
+    posted = fake_erpnext.store[created["id"]]
+    assert posted["update_stock"] == 1
+    # Not "Stores", which is where ERPNext would have looked.
+    assert posted["set_warehouse"] == "Finished Goods"
+    assert created["warehouse"] == "Finished Goods"
+
+
+def test_the_sole_warehouse_is_used_when_nothing_is_named_finished_goods(
+    client, admin_token, fake_erpnext
+):
+    """One warehouse is not an ambiguous choice, whatever it is called."""
+    _warehouse(client, admin_token, "Dépôt Central")
+    created = _create(client, admin_token, update_stock=True).json()
+    assert fake_erpnext.store[created["id"]]["set_warehouse"] == "Dépôt Central"
+
+
+def test_an_ambiguous_choice_is_left_to_erpnext(client, admin_token, fake_erpnext):
+    """Two real candidates and no Finished Goods: guessing between them would
+    move stock out of a warehouse nobody chose, which is the bug, not the fix."""
+    _warehouse(client, admin_token, "Dépôt Nord")
+    _warehouse(client, admin_token, "Dépôt Sud")
+    created = _create(client, admin_token, update_stock=True).json()
+    assert "set_warehouse" not in fake_erpnext.store[created["id"]]
+
+
+def test_a_sale_that_moves_no_stock_records_no_warehouse(
+    client, admin_token, fake_erpnext
+):
+    """An invoice that moves nothing has no warehouse to record, and writing one
+    would imply a movement that never happened."""
+    _warehouse(client, admin_token, "Finished Goods")
+    created = _create(client, admin_token, update_stock=False).json()
+    assert "set_warehouse" not in fake_erpnext.store[created["id"]]
+    assert created["warehouse"] is None
+
+
+def test_an_explicitly_chosen_warehouse_is_never_overridden(
+    client, admin_token, fake_erpnext
+):
+    _warehouse(client, admin_token, "Finished Goods")
+    _warehouse(client, admin_token, "Cold Room")
+    created = _create(
+        client, admin_token, update_stock=True, warehouse="Cold Room"
+    ).json()
+    assert fake_erpnext.store[created["id"]]["set_warehouse"] == "Cold Room"
+
+
+def test_an_amendment_keeps_the_warehouse_it_shipped_from(
+    client, admin_token, fake_erpnext
+):
+    """A PUT replaces the whole document. Read back and sent again, or the
+    correction quietly ships from somewhere else — the same trap the VAT
+    template and the stock flag already carry."""
+    _warehouse(client, admin_token, "Finished Goods")
+    _warehouse(client, admin_token, "Cold Room")
+    created = _create(
+        client, admin_token, update_stock=True, warehouse="Cold Room"
+    ).json()
+    assert created["warehouse"] == "Cold Room"
+
+    new_id = _amend(
+        client,
+        admin_token,
+        created["id"],
+        update_stock=created["update_stock"],
+        warehouse=created["warehouse"],
+    ).json()["id"]
+    assert fake_erpnext.store[new_id]["set_warehouse"] == "Cold Room"
+
+
+# --- A document that will not post leaves nothing behind ------------------
+
+
+def test_a_refused_submit_leaves_no_draft_invoice(client, admin_token, fake_erpnext):
+    """Create and submit are two calls and cannot be one transaction. When the
+    submit is refused the draft has already been written, and leaving it there
+    puts a document that looks posted into the list — thirteen of them on the
+    live instance, 66.5M XAF that had never reached the ledger."""
+    fake_erpnext.refuse_submit = "Sales Invoice"
+
+    resp = _create(client, admin_token)
+    assert resp.status_code >= 400
+
+    invoices = [
+        name for name, doc in fake_erpnext.store.items()
+        if doc.get("doctype") == "Sales Invoice"
+    ]
+    assert invoices == [], f"a refused invoice was left behind: {invoices}"
+
+
+def test_the_refusal_survives_the_cleanup(client, admin_token, fake_erpnext):
+    """Deleting the draft must not replace ERPNext's reason with its own."""
+    fake_erpnext.refuse_submit = "Sales Invoice"
+    fake_erpnext.refuse_delete = True
+
+    resp = _create(client, admin_token)
+    assert resp.status_code >= 400
+    assert "negative stock" in resp.text.lower()

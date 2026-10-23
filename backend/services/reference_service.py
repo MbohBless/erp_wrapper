@@ -38,6 +38,29 @@ class ReferenceService:
                 return preferred
         return groups[0]
 
+    async def default_warehouse(self) -> str | None:
+        """The warehouse stock actually moves through.
+
+        Same rule the goods-movement form preselects with, so a sale draws from
+        the place a receipt put the goods. That agreement cannot be left to
+        ERPNext: told nothing, it takes the warehouse from the *item's* default,
+        which it copies from Stock Settings when the item is created — on a
+        fresh site, "Stores". Receive into Finished Goods and sell with stock
+        update on, and the invoice looks for the goods somewhere they have never
+        been and fails with a negative-stock error naming a warehouse the user
+        has never chosen.
+
+        Prefers Finished Goods: this is a distribution business, devices arrive
+        finished and leave finished. Falls back to the sole warehouse when there
+        is only one, and to nothing when the choice is genuinely ambiguous —
+        better ERPNext's default than a guess between two real candidates.
+        """
+        warehouses = await self.repo.warehouses()
+        for warehouse in warehouses:
+            if "finished goods" in warehouse.lower():
+                return warehouse
+        return warehouses[0] if len(warehouses) == 1 else None
+
     async def default_customer_group(self) -> str | None:
         """A selectable customer group, preferring the conventional one.
 

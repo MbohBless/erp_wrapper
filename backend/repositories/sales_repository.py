@@ -28,6 +28,7 @@ _LIST_FIELDS = [
     "amended_from",
     "is_opening",
     "update_stock",
+    "set_warehouse",
     "taxes_and_charges",
     "custom_is_commissioned",
     "custom_commission_agent",
@@ -39,6 +40,14 @@ _LIST_FIELDS = [
 # once for nothing. The replacement carries `amended_from`, which is where the
 # original stays visible.
 _NOT_CANCELLED = ["docstatus", "!=", 2]
+
+# For the resume check below, "already replaced" has to mean *posted*, not
+# merely "not cancelled" — `!= 2` also matches a draft. A replacement left as a
+# draft by a failed submit would be returned as though the correction had
+# succeeded, answering 200 with nothing in the ledger, and every retry would do
+# the same. That is how ACC-SINV-2026-00140 came to be cancelled on the live
+# instance with its 350,000 XAF replacement sitting unposted.
+_SUBMITTED = ["docstatus", "=", 1]
 
 
 def _from_erpnext(doc: dict) -> SalesInvoiceRead:
@@ -67,6 +76,7 @@ def _from_erpnext(doc: dict) -> SalesInvoiceRead:
         remarks=doc.get("remarks") or None,
         items=items,
         update_stock=bool(_num(doc.get("update_stock"))),
+        warehouse=doc.get("set_warehouse") or None,
         taxes_and_charges=doc.get("taxes_and_charges") or None,
         is_commissioned=bool(_num(doc.get("custom_is_commissioned"))),
         commission_agent=doc.get("custom_commission_agent") or None,
@@ -181,7 +191,7 @@ class SalesRepository:
             existing = await self.client.list_documents(
                 self.DOCTYPE,
                 fields=["name"],
-                filters=[["amended_from", "=", name], _NOT_CANCELLED],
+                filters=[["amended_from", "=", name], _SUBMITTED],
                 limit=1,
             )
             if existing:
@@ -217,6 +227,11 @@ class SalesRepository:
             payload["set_posting_time"] = 1
         payload["remarks"] = data.remarks or ""
         payload["update_stock"] = 1 if data.update_stock else 0
+        # Document-level, so ERPNext stamps it onto every line. Only with a
+        # stock update — on an invoice that moves no stock it means nothing, and
+        # writing it anyway would imply a movement that never happened.
+        if data.update_stock and data.warehouse:
+            payload["set_warehouse"] = data.warehouse
         if data.taxes_and_charges:
             payload["taxes_and_charges"] = data.taxes_and_charges
         payload["custom_is_commissioned"] = 1 if data.is_commissioned else 0
@@ -237,6 +252,7 @@ class SalesRepository:
             posting_date=data.posting_date,
             remarks=data.remarks,
             update_stock=data.update_stock,
+            warehouse=data.warehouse,
             taxes_and_charges=data.taxes_and_charges,
             is_commissioned=data.is_commissioned,
             commission_agent=data.commission_agent,

@@ -5,11 +5,21 @@ from fastapi import HTTPException, status
 from repositories.product_repository import ProductRepository
 from repositories.sales_repository import SalesRepository
 from schemas.sales import SalesInvoiceCreate, SalesInvoiceRead, SalesInvoiceUpdate
+from services.reference_service import ReferenceService
 
 
 class SalesService:
-    def __init__(self, repo: SalesRepository, products: ProductRepository) -> None:
+    def __init__(
+        self,
+        repo: SalesRepository,
+        products: ProductRepository,
+        reference: ReferenceService | None = None,
+    ) -> None:
         self.repo = repo
+        # Resolves which warehouse a stock-updating sale draws from. Left to
+        # ERPNext the answer is the item's default, which is not where the app
+        # puts stock — see ReferenceService.default_warehouse.
+        self.reference = reference
         # Needed to stamp each line with the product's own selling price. Read
         # here rather than taken from the request: a list price the caller
         # supplies is a list price the caller can invent, and the whole value of
@@ -33,7 +43,21 @@ class SalesService:
 
     async def create(self, data: SalesInvoiceCreate) -> SalesInvoiceRead:
         self._check_commission(data)
+        data = await self._with_warehouse(data)
         return await self.repo.create(data, await self._list_rates(data.items))
+
+    async def _with_warehouse(self, data):
+        """Fill in the warehouse a stock-updating sale ships from.
+
+        Only when the caller named none, and only when the sale moves stock:
+        an explicit choice is never overridden, and an invoice that moves no
+        stock has no warehouse to record. If no unambiguous default exists the
+        field is left empty and ERPNext decides, as before.
+        """
+        if not data.update_stock or data.warehouse or self.reference is None:
+            return data
+        warehouse = await self.reference.default_warehouse()
+        return data.model_copy(update={"warehouse": warehouse}) if warehouse else data
 
     @staticmethod
     def _check_commission(data: SalesInvoiceCreate) -> None:
@@ -82,6 +106,7 @@ class SalesService:
         current = await self.get(invoice_id)  # 404s if there is no such invoice
         self._check_commission(data)
         self._ensure_amendable(current)
+        data = await self._with_warehouse(data)
         return await self.repo.amend(invoice_id, data, await self._list_rates(data.items))
 
     @staticmethod

@@ -408,6 +408,66 @@ category and customer-group pickers read master data.
 
 ---
 
+## 11. A sale that moves stock says which warehouse it moves it from
+
+**Decision.** When `update_stock` is set, the invoice carries `set_warehouse` —
+the caller's choice, or the same warehouse the goods-movement form preselects
+(one named "Finished Goods", else the only one). Only with a stock update, and
+never over an explicit choice.
+
+**Constraint.** ERPNext, told nothing, resolves the warehouse from the *item's*
+default, which it copies from Stock Settings when the item is created. Nothing
+connects that to where the application receives goods. Reproduced on a fresh
+instance: 100 units received into Finished Goods, then an invoice with the box
+ticked —
+
+    417 NegativeStockError: 10.0 units of REPRO-STOCK-01 needed in
+    Warehouse Stores - LTM to complete this transaction
+
+— a warehouse the user never chose, holding stock that was never put there.
+
+**Why it did not show on the live instance.** Its Stock Settings default is
+`Finished Goods - QBS` and `consolidate_warehouse.py` repointed every item to
+match, so ERPNext's guess happens to agree with ours. That agreement is
+incidental: a second warehouse, or a site provisioned from scratch, breaks it.
+The users reporting "the stock does not update" were describing a defect that
+was real everywhere except the one place it was being looked for.
+
+**The read model carries it too** (§2). A `PUT` replaces the whole document, so
+a warehouse the API cannot read back is a warehouse an amendment relocates.
+
+**Left empty when the choice is ambiguous** — two real warehouses and no
+Finished Goods. Guessing between them would move stock out of a warehouse
+nobody picked, which is the bug, not the fix.
+
+### A refused document leaves nothing behind
+
+Creating and submitting are two REST calls and cannot be one transaction. The
+draft exists by the time the submit is refused, and nothing removed it. Because
+the lists exclude only *cancelled* documents, it then sat among real ones,
+contributing nothing to the ledger.
+
+That is not hypothetical: the live instance holds thirteen purchase invoices,
+**66,552,982 XAF**, in exactly this state — every one an opening bill dated 2025,
+refused because the only Fiscal Year is 2026, created and then abandoned. The
+app's own audit log records 13 failed `purchase.create` calls against 8
+successful ones. The draft is now deleted and the original error re-raised; a
+failure to clean up is logged, never raised, so the caller still learns why the
+document was refused rather than why the tidying was.
+
+### "Already amended" has to mean *posted*
+
+The guard that stops a retried amendment posting a second invoice searched for a
+replacement with `docstatus != 2`. That also matches a **draft** — so a
+replacement stranded by a failed submit was returned as though the correction
+had succeeded, answering 200 with nothing in the ledger, and every retry did the
+same. It reads `docstatus = 1` now.
+
+The live instance shows the shape of it: `ACC-SINV-2026-00140` cancelled, its
+350,000 XAF replacement `-1` sitting unposted since 19 August with a posting date
+of `0004-07-04`, and no retry able to move it.
+
+
 ## Open items
 
 | Item | Why it is not done |

@@ -34,6 +34,14 @@ _LIST_FIELDS = [
 # amendment. Listing it beside its replacement would show one purchase twice.
 _NOT_CANCELLED = ["docstatus", "!=", 2]
 
+# For the resume check below, "already replaced" has to mean *posted*, not
+# merely "not cancelled" — `!= 2` also matches a draft. A replacement left as a
+# draft by a failed submit would be returned as though the correction had
+# succeeded, answering 200 with nothing in the ledger, and every retry would do
+# the same. That is how ACC-SINV-2026-00140 came to be cancelled on the live
+# instance with its 350,000 XAF replacement sitting unposted.
+_SUBMITTED = ["docstatus", "=", 1]
+
 
 def _from_erpnext(doc: dict) -> PurchaseInvoiceRead:
     grand = _num(doc.get("grand_total"))
@@ -134,7 +142,7 @@ class PurchaseRepository:
             existing = await self.client.list_documents(
                 self.DOCTYPE,
                 fields=["name"],
-                filters=[["amended_from", "=", name], _NOT_CANCELLED],
+                filters=[["amended_from", "=", name], _SUBMITTED],
                 limit=1,
             )
             if existing:

@@ -189,8 +189,14 @@ get_product_service = erpnext_service(
 )
 get_sales_service = erpnext_service(
     # Sales needs the catalogue too: every line is stamped with the product's
-    # own selling price so a discount is recorded rather than inferred.
-    lambda c: SalesService(SalesRepository(c), products=ProductRepository(c))
+    # own selling price so a discount is recorded rather than inferred. And the
+    # reference data, so a sale that updates stock draws from the warehouse the
+    # app receives into rather than the item's own default.
+    lambda c: SalesService(
+        SalesRepository(c),
+        products=ProductRepository(c),
+        reference=ReferenceService(ReferenceRepository(c)),
+    )
 )
 get_purchase_service = erpnext_service(lambda c: PurchaseService(PurchaseRepository(c)))
 get_equipment_service = erpnext_service(

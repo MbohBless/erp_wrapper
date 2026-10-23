@@ -144,6 +144,10 @@ export default function InvoiceForm({ amending }: { amending?: SalesInvoice }) {
         due_date: dueDate || null,
         remarks: remarks || null,
         update_stock: updateStock,
+        // Round-tripped, not re-derived: a PUT replaces the whole document, so
+        // an amendment that omitted this would silently move the sale to the
+        // default warehouse. Null on a new invoice lets the server choose.
+        warehouse: amending?.warehouse ?? null,
         taxes_and_charges: taxTemplate || null,
         is_commissioned: commissioned,
         commission_agent: commissioned ? agent.trim() || null : null,

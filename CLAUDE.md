@@ -96,7 +96,7 @@ is multi-tenant, and the next workspace may want it.
 ```bash
 # Backend (backend/)
 python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
-pytest                        # 416 tests; ERPNext faked, temp SQLite — no live ERPNext
+pytest                        # 445 tests; ERPNext faked, temp SQLite — no live ERPNext
 uvicorn main:app --reload     # dev server on :8000
 
 # Frontend (frontend/)
@@ -137,9 +137,20 @@ Traps, each of which has already cost a production bug:
   default a field to one — that broke customer creation, and filed 12 items
   under a category nothing can group by. Filter pickers to `is_group = 0`, and
   exclude `disabled = 1` too.
+- **A stock-updating sale ships from the *item's* default warehouse, not yours.**
+  `update_stock` alone is not enough: told no warehouse, ERPNext takes the item's
+  default, copied from Stock Settings when the item was created — "Stores" on a
+  fresh site. Receive into Finished Goods and sell with the box ticked and it
+  looks for the goods where they have never been, failing with a negative-stock
+  error naming a warehouse the user never picked. Send `set_warehouse`.
 - **Mandatory child tables.** A Maintenance Visit needs a `purposes` row with
   `service_person` and `work_done`. Missing child rows fail only against real
   ERPNext.
+- **Create-then-submit is two calls and leaves a draft when the submit fails.**
+  The document is already written by the time ERPNext refuses to post it, and a
+  draft is excluded from nothing — it sits in the list looking posted. Delete it
+  and re-raise the original error. Thirteen supplier bills, 66.5M XAF, were
+  stranded this way on the live instance.
 - **`posting_date` is ignored without `set_posting_time = 1`.** Backdating
   silently posts to today, so an invoice lands in the wrong period.
 - **Postings must fall inside an active Fiscal Year.** A fresh site has only the

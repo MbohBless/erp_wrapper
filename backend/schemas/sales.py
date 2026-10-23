@@ -17,6 +17,12 @@ class SalesInvoiceCreate(BaseModel):
     posting_date: str | None = None
     remarks: str | None = None
     update_stock: bool = False
+    # Which warehouse the goods leave, and only meaningful with update_stock.
+    # Sent explicitly because ERPNext's own answer is the *item's* default
+    # warehouse, which has nothing to do with where the app put the stock. Left
+    # None the server fills in the same warehouse the goods-movement form
+    # preselects — see ReferenceService.default_warehouse.
+    warehouse: str | None = Field(default=None, max_length=140)
     taxes_and_charges: str | None = None
     # A sale brokered by an agent and billed below the product's selling price.
     # The customer pays the lower figure and no payout is owed — the agent keeps
@@ -69,6 +75,7 @@ class SalesInvoiceRead(BaseModel):
     # read model hides is silently cleared by an edit — dropping the VAT
     # template off an invoice, or leaving stock issued against a cancelled one.
     update_stock: bool = False
+    warehouse: str | None = None
     taxes_and_charges: str | None = None
     is_commissioned: bool = False
     commission_agent: str | None = None

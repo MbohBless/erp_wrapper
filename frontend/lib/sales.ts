@@ -25,6 +25,7 @@ export type SalesInvoice = {
   remarks: string | null;
   items: InvoiceLine[];
   update_stock: boolean;
+  warehouse: string | null;
   taxes_and_charges: string | null;
   is_commissioned: boolean;
   commission_agent: string | null;
@@ -40,6 +41,7 @@ export type SalesInvoiceInput = {
   due_date?: string | null;
   remarks?: string | null;
   update_stock?: boolean;
+  warehouse?: string | null;
   taxes_and_charges?: string | null;
   is_commissioned?: boolean;
   commission_agent?: string | null;

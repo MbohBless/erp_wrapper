@@ -6,12 +6,15 @@ logic. Domain mapping lives in the repositories that use this client.
 """
 
 import json
+import logging
 from typing import Any
 
 import httpx
 
 from config import settings
 from tenancy.context import current_tenant_or_none
+
+logger = logging.getLogger(__name__)
 
 
 class ERPNextError(Exception):
@@ -244,6 +247,42 @@ async def create_customer(
     return await client.create_document("Customer", payload)
 
 
+async def _create_and_submit(
+    client: "ERPNextClient", doctype: str, payload: dict, submit: bool
+) -> dict:
+    """Create a document and post it, leaving nothing behind if it will not post.
+
+    Creating and submitting are two REST calls and cannot be one transaction.
+    When the submit is refused — a negative-stock error, a posting date outside
+    the fiscal year, a missing default account — the *draft* has already been
+    written, and nothing used to remove it. It stayed in ERPNext holding a real
+    document number and, because the lists exclude only cancelled documents,
+    showed up beside genuine ones while contributing nothing to the ledger.
+    On the live instance that left thirteen supplier bills, 66.5M XAF, sitting
+    where they looked posted and were not.
+
+    The draft is removed and the original failure re-raised: the caller still
+    learns why the document was refused, which is the part that matters. A
+    failure to clean up is logged, never raised — it must not replace the real
+    error with a housekeeping one.
+    """
+    doc = await client.create_document(doctype, payload)
+    if not submit:
+        return doc
+    try:
+        return await client.submit_document(doctype, doc["name"])
+    except Exception:
+        try:
+            await client.delete_document(doctype, doc["name"])
+        except Exception:  # pragma: no cover - best effort
+            logger.warning(
+                "could not remove the unposted %s %s after a failed submit; "
+                "it is a draft in ERPNext and needs deleting by hand",
+                doctype, doc.get("name"),
+            )
+        raise
+
+
 async def create_invoice(
     client: ERPNextClient,
     *,
@@ -253,6 +292,7 @@ async def create_invoice(
     posting_date: str | None = None,
     remarks: str | None = None,
     update_stock: bool = False,
+    warehouse: str | None = None,
     taxes_and_charges: str | None = None,
     is_commissioned: bool = False,
     commission_agent: str | None = None,
@@ -278,6 +318,13 @@ async def create_invoice(
         payload["remarks"] = remarks
     if update_stock:
         payload["update_stock"] = 1
+        # Name the warehouse rather than letting ERPNext choose. Its answer is
+        # the item's own default, copied from Stock Settings when the item was
+        # created, which need not be — and on a fresh site is not — where the
+        # app receives goods. The mismatch surfaces as a negative-stock error
+        # against a warehouse the user never picked.
+        if warehouse:
+            payload["set_warehouse"] = warehouse
     if taxes_and_charges:
         payload["taxes_and_charges"] = taxes_and_charges
     if is_commissioned:
@@ -292,10 +339,7 @@ async def create_invoice(
         # ERPNext names it "<original>-1" and rejects the link unless the
         # original is already at docstatus 2, so cancel first, then create.
         payload["amended_from"] = amended_from
-    doc = await client.create_document("Sales Invoice", payload)
-    if submit:
-        doc = await client.submit_document("Sales Invoice", doc["name"])
-    return doc
+    return await _create_and_submit(client, "Sales Invoice", payload, submit)
 
 
 async def create_purchase(
@@ -331,10 +375,7 @@ async def create_purchase(
         # ERPNext names it "<original>-1" and rejects the link unless the
         # original is already at docstatus 2, so cancel first, then create.
         payload["amended_from"] = amended_from
-    doc = await client.create_document("Purchase Invoice", payload)
-    if submit:
-        doc = await client.submit_document("Purchase Invoice", doc["name"])
-    return doc
+    return await _create_and_submit(client, "Purchase Invoice", payload, submit)
 
 
 async def create_journal_entry(

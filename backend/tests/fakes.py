@@ -45,6 +45,15 @@ class FakeERPNextClient:
     def __init__(self) -> None:
         self.store: dict[str, dict] = {}
         self._seq = itertools.count(1)
+        #: Make submits of one doctype fail, the way ERPNext does for negative
+        #: stock, a posting date outside the fiscal year, or a missing default
+        #: account. The document is created and *then* refused, which is the
+        #: shape that matters: the draft already exists by the time anyone
+        #: learns it will not post.
+        self.refuse_submit: str | None = None
+        #: And make the cleanup itself fail, to check the caller is still told
+        #: why the document was refused rather than why the tidying was.
+        self.refuse_delete = False
 
     @staticmethod
     def _matches(doc: dict, filters) -> bool:
@@ -231,11 +240,17 @@ class FakeERPNextClient:
     async def delete_document(self, doctype, name):
         if name not in self.store:
             raise ERPNextNotFound(f"{doctype} {name} not found")
+        if self.refuse_delete:
+            raise ERPNextError(f"Cannot delete {doctype} {name}", 417)
         del self.store[name]
 
     async def submit_document(self, doctype, name):
         if name not in self.store:
             raise ERPNextNotFound(f"{doctype} {name} not found")
+        if self.refuse_submit == doctype:
+            raise ERPNextError(
+                f"Negative stock error: not enough of the items on {name}", 417
+            )
         self.store[name]["docstatus"] = 1
         return self.store[name]
 
