@@ -78,13 +78,39 @@ fi
 ok "fail2ban $(fail2ban-client --version 2>/dev/null | head -1 | awk '{print $2}')"
 
 # --- Cloudflare ranges, from the same source the DOCKER-USER rules use ------
-CF=$( { curl -fsS --max-time 20 https://www.cloudflare.com/ips-v4
-        curl -fsS --max-time 20 https://www.cloudflare.com/ips-v6; } \
-      | tr -d '\r' | grep . | tr '\n' ' ' ) \
-   || die "could not fetch Cloudflare's ranges — refusing to write a config that omits them"
+# Fetched separately and joined with an explicit newline. Running the two
+# curls inside one subshell concatenates them, and the v4 list has no trailing
+# newline — so its last entry fused with the v6 list's first into
+# "131.0.72.0/222400:cb00::/32". fail2ban could not parse that and reduced it
+# to a bare 0.0.0.0, which it then matched against every address: the jail
+# dutifully ignored every attacker on the internet while reporting itself
+# healthy. Two Cloudflare ranges were missing as well.
+CF_V4=$(curl -fsS --max-time 20 https://www.cloudflare.com/ips-v4 | tr -d '\r' | grep .) \
+   || die "could not fetch Cloudflare's IPv4 ranges — refusing to write a config that omits them"
+CF_V6=$(curl -fsS --max-time 20 https://www.cloudflare.com/ips-v6 | tr -d '\r' | grep .) \
+   || die "could not fetch Cloudflare's IPv6 ranges — refusing to write a config that omits them"
+CF=$(printf '%s\n%s\n' "$CF_V4" "$CF_V6" | grep . | tr '\n' ' ')
 [ -n "$CF" ] || die "Cloudflare range list came back empty"
 
 IGNORE="127.0.0.1/8 ::1 $ADMIN_NETS $CF"
+
+# Every entry must be a real address or network. One malformed token does not
+# fail loudly in fail2ban — it becomes a wildcard that silently exempts
+# everybody, which is the worst possible outcome for a banning tool.
+python3 - "$IGNORE" <<'VALIDATE' || die "the ignore list contains an entry that is not an address or network"
+import ipaddress, sys
+bad = []
+for entry in sys.argv[1].split():
+    try:
+        ipaddress.ip_network(entry, strict=False)
+    except ValueError:
+        bad.append(entry)
+if bad:
+    print("  unparseable: %s" % ", ".join(repr(b) for b in bad))
+    sys.exit(1)
+sys.exit(0)
+VALIDATE
+ok "ignore list validated ($(echo $IGNORE | wc -w | tr -d ' ') entries, all parseable)"
 
 # --- config ----------------------------------------------------------------
 # Written whole each run: a partial edit of someone else's jail.local is how
