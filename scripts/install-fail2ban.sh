@@ -123,6 +123,11 @@ backend = systemd
 [sshd]
 enabled = true
 port    = ssh
+# Ubuntu names the unit ssh.service; fail2ban's stock filter looks for
+# sshd.service and therefore matches nothing at all. The jail still starts,
+# still reports "up", and silently never bans anybody — which is worse than
+# not installing it, because the log volume says it is working.
+journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd
 EOF
 ok "wrote $JAIL"
 ok "ignoring $(echo $IGNORE | wc -w | tr -d ' ') networks (loopback, admin, Cloudflare)"
@@ -136,6 +141,19 @@ ok "fail2ban active and enabled at boot"
 
 fail2ban-client status sshd >/dev/null 2>&1 || die "the sshd jail did not come up"
 ok "sshd jail up"
+
+# "Up" is not "working". The stock filter watches the wrong systemd unit on
+# Ubuntu, so a jail can run forever matching nothing. Compare what the journal
+# holds against what the jail has actually seen, and fail loudly on a mismatch.
+RECENT=$(journalctl -u ssh --since -1h 2>/dev/null | grep -ci "failed password" || true)
+sleep 5
+SEEN=$(fail2ban-client status sshd 2>/dev/null | sed -n 's/.*Total failed:[^0-9]*\([0-9]*\).*/\1/p' | head -1)
+SEEN=${SEEN:-0}
+if [ "${RECENT:-0}" -gt 20 ] && [ "$SEEN" -eq 0 ]; then
+    die "the journal shows $RECENT failed logins in the last hour but the jail has matched 0 —
+   the filter is not reading the right source. Check `journalmatch` in $JAIL."
+fi
+ok "filter matching: $SEEN failure(s) seen, $RECENT in the journal this hour"
 
 # The point of the whole exercise: confirm the address this is being run from
 # cannot be banned by it.
