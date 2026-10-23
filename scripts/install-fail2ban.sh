@@ -151,7 +151,7 @@ SEEN=$(fail2ban-client status sshd 2>/dev/null | sed -n 's/.*Total failed:[^0-9]
 SEEN=${SEEN:-0}
 if [ "${RECENT:-0}" -gt 20 ] && [ "$SEEN" -eq 0 ]; then
     die "the journal shows $RECENT failed logins in the last hour but the jail has matched 0 —
-   the filter is not reading the right source. Check `journalmatch` in $JAIL."
+   the filter is not reading the right source. Check journalmatch in $JAIL."
 fi
 ok "filter matching: $SEEN failure(s) seen, $RECENT in the journal this hour"
 
