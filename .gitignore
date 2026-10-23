@@ -18,3 +18,9 @@ npm-debug.log*
 # OS
 .DS_Store
 # CLAUDE.md
+# Security reviews and deployment scans. These name the host, its firewall
+# posture and weaknesses that are not yet fixed — this repository is public.
+.reports/
+
+# A local client config is a working file for one machine, not a deployment.
+clients/local.yml

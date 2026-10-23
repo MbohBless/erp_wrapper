@@ -1,9 +1,16 @@
-# Reapply the Cloudflare-only rules for the published web ports after boot.
+# Reapply the Cloudflare-only rules for the published web ports.
 #
 # Docker rebuilds its netfilter chains when the daemon starts, so rules added
 # by hand can be lost on reboot. This runs after docker.service and puts them
 # back — without it the origin quietly becomes world-reachable again after a
 # restart, which is the kind of regression nobody notices.
+#
+# NO RemainAfterExit. It was here, and it silently disabled the other half of
+# the protection: a oneshot that stays "active" forever is never re-activated,
+# so the companion timer's OnUnitActiveSec=2min never elapsed again. The unit
+# ran once at boot and then not for 72 days. Reboots were covered; a
+# `docker compose up -d` that recreates a container with published ports —
+# which is what deploying does, and which clears DOCKER-USER — was not.
 [Unit]
 Description=EquiMed: restrict published web ports to Cloudflare
 After=docker.service
@@ -11,7 +18,6 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
 WorkingDirectory=/opt/equimed
 ExecStart=/opt/equimed/scripts/refresh-cloudflare-ips.sh --firewall
 
