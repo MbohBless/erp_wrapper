@@ -42,41 +42,77 @@ def main():
     company = companies[0]
     abbr = frappe.db.get_value("Company", company, "abbr")
 
-    def acc(number_and_name):
-        """Account names are suffixed with the company abbreviation."""
-        return "%s - %s" % (number_and_name, abbr)
+    # The SYSCOHADA *number* is the stable identifier; how a chart carries it is
+    # not. ERPNext ships two variants for Cameroon and they disagree:
+    #
+    #   Syscohada - Plan Comptable            account_number ""    account_name "4111-Clients"
+    #   Syscohada - Plan Comptable avec code  account_number "4111" account_name "Clients"
+    #
+    # Composing "4111-Clients - ABBR" by hand matches the first and silently
+    # misses the second — which is exactly how this script came to print DONE
+    # having changed nothing at all, on a company that then could not post.
+    rows = frappe.get_all(
+        "Account",
+        filters={"company": company, "is_group": 0},
+        fields=["name", "account_number", "account_name"],
+    )
 
-    defaults = {
+    def resolve(number, hint):
+        found = [r for r in rows if (r.account_number or "").strip() == number]
+        if not found:
+            # The number is glued to the name; tolerate "4111-x" and "4111 - x".
+            found = [
+                r for r in rows
+                if (r.account_name or "").replace(" ", "").startswith(number + "-")
+            ]
+        if len(found) > 1:
+            narrowed = [
+                r for r in found if hint.lower() in (r.account_name or "").lower()
+            ]
+            found = narrowed or found
+        return found[0].name if found else None
+
+    # (SYSCOHADA number, a word from the account's name to break ties)
+    wanted = {
         # --- control accounts: these were actively wrong -------------------
-        "default_receivable_account": acc("4111-Clients"),
-        "default_payable_account": acc("4011-Fournisseurs"),
-        "stock_received_but_not_billed": acc("4081-Fournisseurs"),
-        "default_bank_account": acc("5211-Banques en monnaie nationale"),
+        "default_receivable_account": ("4111", "Clients"),
+        "default_payable_account": ("4011", "Fournisseurs"),
+        "stock_received_but_not_billed": ("4081", "Fournisseurs"),
+        "default_bank_account": ("5211", "Banques"),
         # --- were unset; each blocks a specific transaction type -----------
-        "round_off_account": acc("6588-Autres charges diverses"),
-        "stock_adjustment_account": acc("6031-Variations des stocks de marchandises"),
-        "default_expense_account": acc("6011-Dans la Région"),
-        "default_income_account": acc("7011-Dans la Région"),
-        "default_inventory_account": acc("3111-Marchandises A1"),
-        "default_cash_account": acc("5711-Caisse en monnaie nationale"),
+        "round_off_account": ("6588", "charges diverses"),
+        "stock_adjustment_account": ("6031", "Variations des stocks"),
+        "default_expense_account": ("6011", "Région"),
+        "default_income_account": ("7011", "Région"),
+        "default_inventory_account": ("3111", "Marchandises"),
+        "default_cash_account": ("5711", "Caisse"),
     }
+    defaults = {field: resolve(*spec) for field, spec in wanted.items()}
 
     # Without these every mode of payment falls through to the company's default
     # bank account — a cash receipt posts to the bank, and ERPNext then demands
     # a bank reference number for it.
+    cash, bank = resolve("5711", "Caisse"), resolve("5211", "Banques")
     mode_accounts = {
-        "Cash": acc("5711-Caisse en monnaie nationale"),
-        "Bank Draft": acc("5211-Banques en monnaie nationale"),
-        "Cheque": acc("5211-Banques en monnaie nationale"),
-        "Wire Transfer": acc("5211-Banques en monnaie nationale"),
-        "Credit Card": acc("5211-Banques en monnaie nationale"),
+        "Cash": cash,
+        "Bank Draft": bank,
+        "Cheque": bank,
+        "Wire Transfer": bank,
+        "Credit Card": bank,
     }
 
     print("company: %s (abbr %s)" % (company, abbr))
     print()
     print("--- company default accounts " + "-" * 46)
     changed = skipped = 0
+    unresolved = []
     for field, account in defaults.items():
+        if account is None:
+            number, hint = wanted[field]
+            print("  !! %s: no account %s (%s) in this chart" % (field, number, hint))
+            unresolved.append(field)
+            skipped += 1
+            continue
         # Never write a dangling reference: a missing or foreign account passes
         # silently here and fails later at posting time, which is a much worse
         # place to find out.
@@ -99,6 +135,10 @@ def main():
     print("--- mode of payment accounts " + "-" * 46)
     for mode, account in mode_accounts.items():
         if not frappe.db.exists("Mode of Payment", mode):
+            continue
+        if account is None:
+            print("  !! %s: no account to point it at" % mode)
+            skipped += 1
             continue
         if not frappe.db.exists("Account", account):
             print("  !! %s: %s does not exist — SKIPPED" % (mode, account))
@@ -123,6 +163,14 @@ def main():
     frappe.db.commit()
     frappe.clear_cache()
     print()
+    # An unresolved default is not a cosmetic gap — each one of these blocks a
+    # transaction type outright, or posts it to the wrong control account. Say
+    # so in a way a caller can detect, rather than reporting DONE on a company
+    # that cannot post.
+    if unresolved:
+        print("FAILED — %d default(s) could not be resolved in this chart: %s"
+              % (len(unresolved), ", ".join(unresolved)))
+        raise SystemExit(1)
     print("DONE — %d change(s), %d skipped" % (changed, skipped))
 
 

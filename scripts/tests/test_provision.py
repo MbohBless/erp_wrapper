@@ -8,6 +8,7 @@ tested here instead.
 
 import importlib.util
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -189,3 +190,71 @@ def test_the_same_site_is_not_a_conflict():
 def test_an_empty_env_is_not_a_conflict():
     """A first run has nothing to conflict with."""
     assert provision.existing_deployment_conflict(cfg_for(), {}) is None
+
+
+# --- The .env it writes must actually start the stack ---------------------
+#
+# Step 3 selects the production overlay, and step 4 immediately runs
+# `docker compose up` against it. Compose interpolates *every* service in a
+# file, whether or not its profile is active, so a variable marked required by
+# a saas-only service stops a single-tenant deployment dead — one step after
+# the provisioner chose the file that requires it. That failure cost a full
+# provisioning run to find, and no config-validation test could have caught it.
+
+
+def _required_compose_vars() -> set[str]:
+    """Variables the compose files mark required: ${VAR:?message}."""
+    names = set()
+    for name in ("docker-compose.yml", "docker-compose.prod.yml"):
+        for line in (ROOT / name).read_text(encoding="utf-8").splitlines():
+            # Comments document the syntax itself, `${VAR:?message}` included.
+            if line.lstrip().startswith("#"):
+                continue
+            names |= set(re.findall(r"\$\{([A-Z0-9_]+):\?", line))
+    return names
+
+
+def test_the_env_written_satisfies_every_required_compose_variable(env):
+    cfg = {
+        "site": {"domain": "app.acme.com", "erpnext_site": "acme.local"},
+        "company": {"abbrev": "AMS"},
+        "app_admin": {"email": "admin@acme.com", "full_name": "Administrator"},
+    }
+    provision.step_3_env(cfg, {})
+    written = provision.env_read()
+
+    required = _required_compose_vars()
+    assert required, "no required variables found — has the compose syntax changed?"
+    missing = sorted(k for k in required if not written.get(k))
+    assert not missing, (
+        f"provisioning writes a .env that `docker compose up` refuses: {missing}"
+    )
+
+
+# --- Handing the payload to the container --------------------------------
+#
+# The bootstrap payload carries the ERPNext admin password, so it is written
+# 0600 on the host. `docker compose cp` preserves owner and mode, and bench runs
+# as `frappe` — so the container could not read the file the provisioner had
+# just handed it, and step 6 died on its own config. This asserts the handover
+# and the cleanup; it cannot prove the uid inside a container, which is what
+# made the bug invisible until a real run.
+
+
+def test_the_payload_is_made_readable_to_the_container_and_then_removed(monkeypatch):
+    calls = []
+    monkeypatch.setattr(provision, "run", lambda cmd, **kw: calls.append(cmd))
+    monkeypatch.setattr(
+        provision.subprocess,
+        "run",
+        lambda *a, **k: type("P", (), {"stdout": ""})(),
+    )
+
+    provision._bench(Path("scripts/bootstrap_erpnext.py"), "acme.local", Path("p.json"))
+
+    chown = [c for c in calls if "chown" in c]
+    assert chown, "the copied payload is never made readable by the bench user"
+    assert "frappe:frappe" in chown[0] and "/tmp/provision.json" in chown[0]
+
+    removed = [c for c in calls if "rm" in c and "/tmp/provision.json" in c]
+    assert removed, "the password payload is left behind inside the container"

@@ -46,9 +46,20 @@ company:
   timezone: Africa/Douala
   currency: XAF
 
-  # Must match a chart ERPNext ships for the country. SYSCOHADA is the OHADA
-  # standard used across francophone West and Central Africa.
-  chart_of_accounts: SYSCOHADA
+  # Must be EXACTLY a chart ERPNext ships for the country — it names a file, and
+  # an unrecognised value does not fail loudly: the company is created with no
+  # accounts at all. Plain "SYSCOHADA" is the obvious guess and is not one of
+  # them. For Cameroon ERPNext offers:
+  #   Syscohada - Plan Comptable             <- what the live deployment runs
+  #   Syscohada - Plan Comptable avec code
+  #   Standard
+  #   Standard with Numbers
+  # The two Syscohada variants carry the account number differently — the plain
+  # one bakes it into the name ("4111-Clients", account_number empty), "avec
+  # code" splits them ("Clients", account_number "4111"). Both give an OHADA
+  # chart; anything reading accounts by number handles either. Not changeable
+  # once anything is posted.
+  chart_of_accounts: Syscohada - Plan Comptable
 
   # Postings outside an active fiscal year are refused, and a fresh site has
   # only the year created here — which is why opening balances have to post on
@@ -70,12 +81,31 @@ erpnext_admin:
 integration_user:
   email: equimed-integration@example.com
   full_name: EquiMed Integration
+#
+# ERPNext's "<area> Manager" roles do NOT imply the matching "<area> User"
+# roles — permissions are granted per role, and the *User* ones carry rights the
+# Manager ones simply do not have. With Managers alone, `Warehouse` is not even
+# readable, so every warehouse picker, the Inventory page and stock levels
+# return 403 the moment the app is used. Each line below is load-bearing:
+#
+#   Item Manager     Item, Warehouse, Batch, Serial No     (write)
+#   Sales User       Customer                              (write)
+#   Stock User       Stock Entry, Bin/Warehouse            (read+write)
+#   Accounts User    Sales/Purchase Invoice, Payment Entry (write)
+#   Purchase User    Warehouse                             (read)
+#   Maintenance User Maintenance Visit                     (write)
   roles:
     - System Manager
     - Accounts Manager
+    - Accounts User
     - Stock Manager
+    - Stock User
     - Sales Manager
+    - Sales User
     - Purchase Manager
+    - Purchase User
+    - Item Manager
+    - Maintenance User
 
 # The first application user. Everyone else is created from Settings → Users.
 app_admin:

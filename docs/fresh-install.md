@@ -58,7 +58,7 @@ Two of them can never be changed afterwards. Get them right the first time.
 | **Company abbreviation** | **QBS** | ❌ **never** — `set_only_once` |
 | Country | Cameroon | ⚠️ painful |
 | Currency | XAF | ⚠️ painful |
-| **Chart of accounts** | **SYSCOHADA** | ❌ not once anything is posted |
+| **Chart of accounts** | **Syscohada - Plan Comptable** | ❌ not once anything is posted |
 | Fiscal year start | 1 January | ⚠️ painful |
 
 > **The abbreviation is why a reset is sometimes the only option.** It is
@@ -123,7 +123,7 @@ from `.env`, and complete the wizard:
 | Currency | **XAF** |
 | Company Name | **Quality BioMedicals Sarl** |
 | Company Abbreviation | **check this before continuing** — see below |
-| Chart of Accounts | **SYSCOHADA** |
+| Chart of Accounts | **Syscohada - Plan Comptable** |
 | Fiscal year | 1 Jan – 31 Dec |
 
 > **ERPNext auto-fills the abbreviation from the company name and it is
@@ -131,6 +131,19 @@ from `.env`, and complete the wizard:
 > Biomedicals" yields `QB`. Whatever you want, type it explicitly before
 > continuing — it is suffixed onto every account, warehouse and cost-centre
 > name, and the only way to change it afterwards is another full reset.
+
+> **Pick the chart by its exact name.** ERPNext offers four for Cameroon —
+> `Syscohada - Plan Comptable`, `Syscohada - Plan Comptable avec code`,
+> `Standard` and `Standard with Numbers`. There is no entry called plain
+> "SYSCOHADA", and provisioning refuses a name ERPNext does not have.
+>
+> **This deployment runs `Syscohada - Plan Comptable`.** The two Syscohada
+> variants differ in where the number lives: the plain one bakes it into the
+> account name (`4111-Clients`, `account_number` empty), *avec code* splits
+> them (`Clients` with `account_number` `4111`). Both are valid OHADA charts,
+> but anything that looks an account up by composing its name matches only
+> one of them — `configure_company_accounts.py` resolves by number for
+> exactly this reason.
 
 Building the SYSCOHADA chart takes a few minutes and creates ~1,400 accounts.
 

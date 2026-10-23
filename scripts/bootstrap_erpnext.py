@@ -81,7 +81,32 @@ def run_setup_wizard(cfg):
         "password": cfg["erpnext_admin"]["password"],
         "setup_demo": 0,
     }
-    from erpnext.setup.setup_wizard.setup_wizard import setup_complete
+    # The chart name is not free text — it selects a file shipped with ERPNext,
+    # and an unknown one does not raise. The company is created with no accounts,
+    # and the first thing to notice is the *tax template* failing on a missing
+    # root account, several frames from the cause. "SYSCOHADA" is the obvious
+    # value and is wrong; the country's real options are listed below. Checked
+    # here rather than in load_config because only ERPNext knows them.
+    from erpnext.accounts.doctype.account.chart_of_accounts.chart_of_accounts import (
+        get_charts_for_country,
+    )
+
+    charts = get_charts_for_country(c["country"])
+    if c["chart_of_accounts"] not in charts:
+        raise RuntimeError(
+            "chart_of_accounts %r is not one ERPNext has for %s. Valid: %s"
+            % (c["chart_of_accounts"], c["country"], ", ".join(repr(x) for x in charts))
+        )
+
+    # Frappe's, NOT erpnext.setup.setup_wizard.setup_wizard.setup_complete.
+    # Both exist and both take the same payload, which is the trap: ERPNext's is
+    # a bare stage runner that installs fixtures and returns. It never sets
+    # System Settings.setup_complete, never records country/currency/timezone,
+    # and swallows nothing — so a half-built site reports success. Frappe's is
+    # the one the browser calls: it runs every app's stages, finalises the flag,
+    # and routes failures through handle_setup_exception. It also parses the
+    # payload itself, so a plain dict is correct here.
+    from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
 
     try:
         setup_complete(args)
@@ -93,8 +118,26 @@ def run_setup_wizard(cfg):
             {k: ("***" if k == "password" else v) for k, v in args.items()}, indent=2))
         raise
     frappe.db.commit()
+
+    # Verify rather than assume. The wizard reports through a realtime channel
+    # nobody is listening to here, so "it returned" is not "it worked" — and a
+    # site with no Company is one that cannot post a single transaction, which
+    # is a far better thing to learn now than at step 7.
+    company = frappe.db.get_value(
+        "Company", c["name"], ["name", "abbr"], as_dict=True
+    )
+    if not company:
+        raise RuntimeError(
+            "the setup wizard returned but created no Company %r — the site is "
+            "half-built; rebuild it rather than continuing" % c["name"]
+        )
+    if not frappe.db.get_single_value("System Settings", "setup_complete"):
+        raise RuntimeError(
+            "the setup wizard returned but System Settings.setup_complete is "
+            "still 0 — the site is half-built; rebuild it rather than continuing"
+        )
     step("setup wizard", "%s (%s), %s, %s" % (
-        c["name"], c["abbrev"], c["currency"], c["chart_of_accounts"]))
+        company.name, company.abbr, c["currency"], c["chart_of_accounts"]))
 
 
 # -------------------------------------------------------------- the taxonomy

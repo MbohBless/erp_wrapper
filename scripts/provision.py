@@ -290,6 +290,13 @@ def step_3_env(cfg, state):
         "SITE_NAME": site["erpnext_site"],
         "SITE_ADDRESS": site["domain"],
         "CORS_ORIGINS": json.dumps([f"https://{site['domain']}"]),
+        # Only platform-api reads this, and that service is saas-profile only —
+        # but compose interpolates every service in the file whether its profile
+        # is active or not, and the prod overlay marks it required. Without it
+        # `docker compose up` fails outright on a single-tenant deployment, one
+        # step after we selected that overlay. Empty allowlist: this deployment
+        # serves no operator console.
+        "PLATFORM_CORS_ORIGINS": json.dumps([]),
         "COMPOSE_FILE": "docker-compose.yml:docker-compose.prod.yml",
         "CADDYFILE": "Caddyfile",
         "TENANCY_MODE": "single",
@@ -363,13 +370,25 @@ def _bench(script: Path, site: str, payload: Path | None = None) -> str:
     if payload:
         run(["docker", "compose", "cp", str(payload),
              "erpnext-backend:/tmp/provision.json"])
+        # `cp` preserves the host's owner and mode, and the payload is 0600
+        # because it carries the ERPNext admin password. bench runs as `frappe`,
+        # which is neither that owner nor able to read the file — so hand it
+        # over inside the container rather than widening it on the host.
+        run(["docker", "compose", "exec", "-u", "0", "-T", "erpnext-backend",
+             "chown", "frappe:frappe", "/tmp/provision.json"])
     one_liner = f'exec(open("/tmp/{script.name}").read(), globals())'
-    proc = subprocess.run(
-        ["docker", "compose", "exec", "-T", "erpnext-backend",
-         "bench", "--site", site, "console"],
-        cwd=ROOT, input=one_liner, text=True,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-    )
+    try:
+        proc = subprocess.run(
+            ["docker", "compose", "exec", "-T", "erpnext-backend",
+             "bench", "--site", site, "console"],
+            cwd=ROOT, input=one_liner, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+    finally:
+        if payload:
+            # A password does not stay behind in a long-lived container.
+            run(["docker", "compose", "exec", "-T", "erpnext-backend",
+                 "rm", "-f", "/tmp/provision.json"], check=False)
     return proc.stdout
 
 
@@ -415,11 +434,15 @@ def step_7_company_accounts(cfg, state):
     right."""
     out = _bench(ROOT / "scripts" / "configure_company_accounts.py",
                  cfg["site"]["erpnext_site"])
-    if "DONE" not in out and "ok" not in out.lower():
+    # `"ok" in out.lower()` used to be the fallback here, which "broken",
+    # "token" and "look" all satisfy — a check that cannot fail. And this step
+    # is not advisory: without these accounts the company cannot post a
+    # purchase invoice, receive goods, or take a cash payment, so a failure
+    # here stops provisioning rather than printing a warning nobody reads.
+    if "FAILED" in out or "DONE" not in out:
         print(out[-2000:])
-        warn("company account configuration produced no success marker — check above")
-    else:
-        ok("company default accounts configured")
+        die("company default accounts were not configured — see the output above")
+    ok("company default accounts configured")
 
 
 def step_8_custom_fields(cfg, state):
